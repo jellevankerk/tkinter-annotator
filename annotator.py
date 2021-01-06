@@ -2,6 +2,9 @@ import math
 import numpy as np
 from tkinter import Canvas, Frame, Menu, Tk, ALL
 
+from utilities import find_coords
+from get_shapes import get_circle, get_ellipse, get_roi
+
 
 class Annotator(Frame):
     def __init__(self, master, height=1000, width=1000):
@@ -66,17 +69,11 @@ class Annotator(Frame):
         )
 
     def set_shape(self, mode):
+        """" Set shape of the annotations (circle, ellipse, roi or polygon)"""
         self.mode = mode
 
-    def find_coords(self, center, xdim, ydim):
-        x0 = center[0] - int(xdim / 2)
-        x1 = center[0] + int(xdim / 2)
-
-        y0 = center[1] - int(ydim / 2)
-        y1 = center[1] + int(ydim / 2)
-        return (x0, y0), (x1, y1)
-
     def create_annotation(self, event):
+        """ Creates annotations using the coordinates of left mouse clicks"""
         if self.mode == "polygon":
             self.draw_polygons(event)
         else:
@@ -94,83 +91,29 @@ class Annotator(Frame):
                 return temp_id
 
     def create_annotation_func(self, coord1, coord2, mode=None):
+        """ Depending on the mode of the functions draws a circle, ellipse, roi or polygon """
         if not mode:
             mode = self.mode
         if mode == "ellipse":
-            temp = self.draw_ellipse(coord1, coord2)
+            x0, y0, x1, y1 = get_ellipse(coord1, coord2)
+            temp_id = self.canvas.create_oval(
+                x0, y0, x1, y1, fill="", outline="green", width=2
+            )
         elif mode == "circle":
-            temp = self.draw_circle(coord1, coord2)
+            x0, y0, x1, y1 = get_circle(coord1, coord2)
+            temp_id = self.canvas.create_oval(
+                x0, y0, x1, y1, fill="", outline="green", width=2
+            )
         elif mode == "roi":
-            temp = self.draw_roi(coord1, coord2)
-        return temp
-
-    def draw_ellipse(self, center, edge):
-        # x0 y0 leftop x1, y1 right down
-        if edge[0] > center[0]:
-            x0 = center[0] - (edge[0] - center[0])
-            x1 = edge[0]
-        elif edge[0] < center[0]:
-            x0 = edge[0]
-            x1 = center[0] - (edge[0] - center[0])
-        else:
-            x0 = center[0]
-            x1 = center[0]
-
-        if edge[1] > center[1]:
-            y0 = center[1] - (edge[1] - center[1])
-            y1 = edge[1]
-        elif edge[1] < center[1]:
-            y0 = edge[1]
-            y1 = center[1] - (edge[1] - center[1])
-        else:
-            y0 = center[1]
-            y1 = center[1]
-
-        temp_id = self.canvas.create_oval(
-            x0, y0, x1, y1, fill="", outline="green", width=2
-        )
-        return temp_id
-
-    def draw_circle(self, coord1, coord2):
-        radius = math.sqrt(
-            math.pow(coord1[0] - coord2[0], 2) + math.pow(coord1[1] - coord2[1], 2)
-        )
-        x0, x1 = coord1[0] + radius, coord1[0] - radius
-        y0, y1 = coord1[1] - radius, coord1[1] + radius
-        temp_id = self.canvas.create_oval(
-            x0, y0, x1, y1, fill="", outline="green", width=2
-        )
-        return temp_id
-
-    def draw_roi(self, coord1, coord2):
-        if coord1[0] > coord2[0]:
-            x0 = coord1[0]
-            x1 = coord2[0]
-        elif coord1[0] < coord2[0]:
-            x0 = coord2[0]
-            x1 = coord1[0]
-        else:
-            x0 = 0
-            x1 = 0
-
-        if coord1[1] > coord2[1]:
-            y0 = coord1[1]
-            y1 = coord2[1]
-        elif coord1[1] < coord2[1]:
-            y0 = coord2[1]
-            y1 = coord1[1]
-        else:
-            y0 = 0
-            y1 = 0
-
-        temp_id = self.canvas.create_rectangle(
-            x0, y0, x1, y1, fill="", outline="green", width=2
-        )
+            x0, y0, x1, y1 = get_roi(coord1, coord2)
+            temp_id = self.canvas.create_rectangle(
+                x0, y0, x1, y1, fill="", outline="green", width=2
+            )
         return temp_id
 
     def motion_create_annotation(self, event):
         """ Track mouse position over the canvas """
-        x = self.canvas.canvasx(event.x)  # get coordinates of the event on the canvas
+        x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
         if self.motion_id:
             self.canvas.delete(self.motion_id)
@@ -263,12 +206,9 @@ class Annotator(Frame):
             if mode == "polygon":
                 self.move(event, widget_id)
             else:
-                # center = [coords[0][0] - coords[1][0], coords[0][1] - coords[1][1]]
                 xdim = abs(coords[0][0] - coords[1][0])
                 ydim = abs(coords[0][1] - coords[1][1])
-                new_coord1, new_coord2 = self.find_coords(
-                    (event.x, event.y), xdim, ydim
-                )
+                new_coord1, new_coord2 = find_coords((event.x, event.y), xdim, ydim)
                 new_id = self.create_annotation_func(new_coord1, new_coord2, mode)
                 self.move_ids.append(new_id)
                 self.move_ids.pop(self.move_ids.index(widget_id[0]))
