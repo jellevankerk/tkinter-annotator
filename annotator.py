@@ -4,6 +4,7 @@ from tkinter import Canvas, Frame, Menu, Tk, ALL
 
 from utilities import find_coords
 from get_shapes import get_circle, get_ellipse, get_roi
+from get_image import get_image
 
 
 class Annotator(Frame):
@@ -14,6 +15,7 @@ class Annotator(Frame):
         self.canvas.pack()
 
         self.mode = "polygon"
+        self.scale = 1.0
         self.start = None
         self.do_polygon = False
 
@@ -28,6 +30,13 @@ class Annotator(Frame):
         self.temp_polygon_points = []
         self.temp_polygon_point_ids = []
         self.move_polygon_points = []
+        self.top_corner = self.canvas.create_text(0, 0)
+        self.imageid = self.canvas.create_image(
+            self.canvas.coords(self.top_corner),
+            (0, 0),
+            image=get_image(self.scale),
+            anchor="nw",
+        )
 
         # Create annotations
         self.canvas.bind("<ButtonPress-1>", self.create_annotation)
@@ -122,7 +131,9 @@ class Annotator(Frame):
 
     def select_delete(self, event):
         """ Selects/deselects the closest annotation and adds/removes 'DELETE' tag"""
-        widget_id = event.widget.find_closest(event.x, event.y, halo=2)
+        widget_id = event.widget.find_closest(
+            event.x, event.y, halo=2, start=self.imageid
+        )
         if len(widget_id):
             if widget_id[0] in self.delete_ids:
                 self.canvas.itemconfigure(widget_id, outline="green")
@@ -134,7 +145,9 @@ class Annotator(Frame):
 
     def select_move(self, event):
         """ Selects/deselects the closest annotation and adds/removes 'MOVE' tag"""
-        widget_id = event.widget.find_closest(event.x, event.y, halo=5)
+        widget_id = event.widget.find_closest(
+            event.x, event.y, halo=5, start=self.imageid
+        )
         if len(widget_id):
             if widget_id[0] in self.move_ids:
                 self.canvas.itemconfigure(widget_id, outline="green")
