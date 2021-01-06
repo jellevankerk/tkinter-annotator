@@ -194,7 +194,7 @@ class Annotator(Frame):
         center_x, center_y = event.x, event.y
         self.temp_polygon_points.append((center_x, center_y))
 
-        dots = self.draw_dots(self.temp_polygon_points)
+        dots = self.draw_points(self.temp_polygon_points)
         self.temp_polygon_point_ids.extend(dots)
 
         self.draw_polygon_func(self.temp_polygon_points, True)
