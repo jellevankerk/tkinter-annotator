@@ -121,7 +121,7 @@ class Annotator(Frame):
             self.motion_id = self.create_annotation_func(self.anno_coords[0], (x, y))
 
     def select_delete(self, event):
-
+        """ Selects/deselects the closest annotation and adds/removes 'DELETE' tag"""
         widget_id = event.widget.find_closest(event.x, event.y, halo=2)
         if len(widget_id):
             if widget_id[0] in self.delete_ids:
@@ -133,6 +133,7 @@ class Annotator(Frame):
                 self.delete_ids.append(widget_id[0])
 
     def select_move(self, event):
+        """ Selects/deselects the closest annotation and adds/removes 'MOVE' tag"""
         widget_id = event.widget.find_closest(event.x, event.y, halo=5)
         if len(widget_id):
             if widget_id[0] in self.move_ids:
@@ -142,12 +143,12 @@ class Annotator(Frame):
 
             elif widget_id[0] not in self.delete_ids:
                 if not len(self.move_ids):
-                    self.canvas.itemconfigure(widget_id, tags="SELECT", outline="blue")
+                    self.canvas.itemconfigure(widget_id, tags="MOVE", outline="blue")
                     self.move_ids.append(widget_id[0])
 
     def delete_annotation(self, event):
+        """ Deletes all canvas objects with the tag 'DELETE'"""
         for idx in self.canvas.find_withtag("DELETE"):
-            # del self.annotations_dict[idx]
             self.canvas.delete(idx)
 
     # Polygon functions
@@ -213,7 +214,7 @@ class Annotator(Frame):
                 self.move_ids.append(new_id)
                 self.move_ids.pop(self.move_ids.index(widget_id[0]))
                 self.canvas.delete(widget_id[0])
-                self.canvas.itemconfigure(new_id, tags="SELECT", outline="blue")
+                self.canvas.itemconfigure(new_id, tags="MOVE", outline="blue")
                 self.annotations_dict[f"{new_id}"] = ([new_coord1, new_coord2], mode)
                 del self.annotations_dict[str(widget_id[0])]
 
@@ -235,7 +236,7 @@ class Annotator(Frame):
                 [x[0] + move[0], x[1] + move[1]] for x in self.move_polygon_points
             ]
             new_poly_id = self.canvas.create_polygon(
-                dots_centers, fill="", tags="SELECT", outline="blue", width=2
+                dots_centers, fill="", tags="MOVE", outline="blue", width=2
             )
             self.move_ids.append(new_poly_id)
             self.move_ids.pop(self.move_ids.index(widget_id[0]))
