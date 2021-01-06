@@ -17,6 +17,7 @@ class Annotator(Frame):
 
         self.mode = "roi"
         self.do_polygon = False
+        self.imageid = None
 
         self.annotations_dict = {}
 
@@ -33,7 +34,6 @@ class Annotator(Frame):
         if self.load_image:
             self.image = Image.open(filedialog.askopenfilename())
             self.imscale = 1.0
-            self.imageid = None
             self.delta = 0.75
             width, height = self.image.size
 
@@ -85,7 +85,7 @@ class Annotator(Frame):
     def create_annotation(self, event):
         """ Creates annotations using the coordinates of left mouse clicks"""
         if self.mode == "polygon":
-            self.draw_polygons(event)
+            self.draw_polygon(event)
         else:
             center_x, center_y = event.x, event.y
             self.anno_coords.append([center_x, center_y])
@@ -156,14 +156,66 @@ class Annotator(Frame):
                     self.canvas.itemconfigure(widget_id, tags="MOVE", outline="blue")
                     self.move_ids.append(widget_id[0])
 
+    def move_annotation(self, event):
+        """ Moves annotations with tag 'MOVE' by presing the wheelmouse button and moving the mouse"""
+        widget_id = event.widget.find_closest(event.x, event.y)
+        if widget_id[0] in self.move_ids:
+            coords, mode = self.annotations_dict[str(widget_id[0])]
+
+            if mode == "polygon":
+                self.move_polygon(event, widget_id)
+            else:
+                # Image dimensions
+                xdim = abs(coords[0][0] - coords[1][0])
+                ydim = abs(coords[0][1] - coords[1][1])
+
+                # Create new annotations at new location
+                new_coord1, new_coord2 = find_coords((event.x, event.y), xdim, ydim)
+                new_id = self.create_annotation_func(new_coord1, new_coord2, mode)
+
+                self.move_ids.append(new_id)
+                self.move_ids.pop(self.move_ids.index(widget_id[0]))
+
+                self.canvas.delete(widget_id[0])
+                self.canvas.itemconfigure(new_id, tags="MOVE", outline="blue")
+
+                self.annotations_dict[f"{new_id}"] = ([new_coord1, new_coord2], mode)
+                del self.annotations_dict[str(widget_id[0])]
+
     def delete_annotation(self, event):
         """ Deletes all canvas objects with the tag 'DELETE'"""
         for idx in self.canvas.find_withtag("DELETE"):
             self.canvas.delete(idx)
 
-    # Polygon functions
-    def draw_annotations(self, centers, do_temp=False):
-        # Draw polygon
+    def draw_polygon(self, event):
+        """ Draws polygons"""
+        self.delete_polygons()
+
+        center_x, center_y = event.x, event.y
+        self.temp_polygon_points.append((center_x, center_y))
+
+        dots = self.draw_dots(self.temp_polygon_points)
+        self.temp_polygon_point_ids.extend(dots)
+
+        self.draw_polygon_func(self.temp_polygon_points, True)
+
+    def draw_points(self, centers, color="green"):
+        """ Draws points at all points of polygons"""
+        points = []
+        for pt in centers:
+            x, y = pt
+            x1, y1 = (x - 1), (y - 1)
+            x2, y2 = (x + 1), (y + 1)
+            dot_id = self.canvas.create_oval(
+                x1, y1, x2, y2, fill="green", outline=color, width=5
+            )
+
+            points.append(dot_id)
+
+        return points
+
+    def draw_polygon_func(self, centers, do_temp=False):
+        """ Function to draw polygon"""
         n_points = len(centers)
         temp_id = 0
         if n_points > 2:
@@ -176,69 +228,12 @@ class Annotator(Frame):
         self.temp_polygon_point_ids.append(temp_id)
         return temp_id
 
-    def draw_dots(self, centers, color="green"):
-        dots = []
-        for pt in centers:
-            x, y = pt
-            # draw dot over position which is clicked
-            x1, y1 = (x - 1), (y - 1)
-            x2, y2 = (x + 1), (y + 1)
-            dot_id = self.canvas.create_oval(
-                x1, y1, x2, y2, fill="green", outline=color, width=5
-            )
-
-            dots.append(dot_id)
-
-        return dots
-
-    def draw_polygons(self, event):
-        self.delete_temp_ids()
-
-        center_x, center_y = event.x, event.y
-        self.temp_polygon_points.append((center_x, center_y))
-
-        dots = self.draw_dots(self.temp_polygon_points)
-        self.temp_polygon_point_ids.extend(dots)
-
-        self.draw_annotations(self.temp_polygon_points, True)
-
-    def save_polygons(self, event):
-        self.delete_temp_ids()
-        poly_id = self.draw_annotations(self.temp_polygon_points, False)
-        self.annotations_dict[f"{poly_id}"] = (self.temp_polygon_points, "polygon")
-        self.temp_polygon_point_ids = []
-        self.temp_polygon_points = []
-
-    def move_annotation(self, event):
-
-        widget_id = event.widget.find_closest(event.x, event.y)
-        if widget_id[0] in self.move_ids:
-            coords, mode = self.annotations_dict[str(widget_id[0])]
-            if mode == "polygon":
-                self.move(event, widget_id)
-            else:
-                xdim = abs(coords[0][0] - coords[1][0])
-                ydim = abs(coords[0][1] - coords[1][1])
-                new_coord1, new_coord2 = find_coords((event.x, event.y), xdim, ydim)
-                new_id = self.create_annotation_func(new_coord1, new_coord2, mode)
-                self.move_ids.append(new_id)
-                self.move_ids.pop(self.move_ids.index(widget_id[0]))
-                self.canvas.delete(widget_id[0])
-                self.canvas.itemconfigure(new_id, tags="MOVE", outline="blue")
-                self.annotations_dict[f"{new_id}"] = ([new_coord1, new_coord2], mode)
-                del self.annotations_dict[str(widget_id[0])]
-
-    def delete_all_polygons(self, event):
-        self.canvas.delete(ALL)
-        self.temp = []
-        self.annotations_dict = []
-
-    def move(self, event, widget_id):
-
-        # widget_id = event.widget.find_closest(event.x, event.y)
+    def move_polygon(self, event, widget_id):
+        """ Moves polygon annotations"""
         if widget_id[0] in self.move_ids:
             if not len(self.move_polygon_points):
                 self.move_polygon_points, _ = self.annotations_dict[str(widget_id[0])]
+
             dots_array = np.array(self.move_polygon_points)
             center = np.average(dots_array, 0)
             move = np.array([event.x, event.y]) - center
@@ -254,7 +249,16 @@ class Annotator(Frame):
             del self.annotations_dict[str(widget_id[0])]
             self.annotations_dict[str(new_poly_id)] = (dots_centers, "polygon")
 
-    def delete_temp_ids(self):
+    def save_polygons(self, event):
+        """ Saves current polygon, after this a new polygon can be saved"""
+        self.delete_polygons()
+        poly_id = self.draw_polygon_func(self.temp_polygon_points, False)
+        self.annotations_dict[f"{poly_id}"] = (self.temp_polygon_points, "polygon")
+        self.temp_polygon_point_ids = []
+        self.temp_polygon_points = []
+
+    def delete_polygons(self):
+        """ Deletes all widged ids of temp_polygon"""
         if len(self.temp_polygon_point_ids):
             for idx in self.temp_polygon_point_ids:
                 self.canvas.delete(idx)
