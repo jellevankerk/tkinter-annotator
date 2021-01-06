@@ -1,22 +1,21 @@
 import math
 import numpy as np
-from tkinter import Canvas, Frame, Menu, Tk, ALL
+from PIL import Image, ImageTk
+from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
 from utilities import find_coords
 from get_shapes import get_circle, get_ellipse, get_roi
-from get_image import get_image
 
 
 class Annotator(Frame):
-    def __init__(self, master, height=1000, width=1000):
+    def __init__(self, master, load_image=False, height=1000, width=1000):
         self.master = master
+        self.load_image = load_image
 
         self.canvas = Canvas(self.master, height=height, width=width, bg="black")
         self.canvas.pack()
 
-        self.mode = "polygon"
-        self.scale = 1.0
-        self.start = None
+        self.mode = "roi"
         self.do_polygon = False
 
         self.annotations_dict = {}
@@ -30,13 +29,13 @@ class Annotator(Frame):
         self.temp_polygon_points = []
         self.temp_polygon_point_ids = []
         self.move_polygon_points = []
-        self.top_corner = self.canvas.create_text(0, 0)
-        self.imageid = self.canvas.create_image(
-            self.canvas.coords(self.top_corner),
-            (0, 0),
-            image=get_image(self.scale),
-            anchor="nw",
-        )
+
+        if self.load_image:
+            self.image = Image.open(filedialog.askopenfilename())
+            self.imscale = 1.0
+            self.imageid = None
+            self.delta = 0.75
+            width, height = self.image.size
 
         # Create annotations
         self.canvas.bind("<ButtonPress-1>", self.create_annotation)
@@ -76,6 +75,8 @@ class Annotator(Frame):
             label="Polygon",
             command=lambda: self.set_shape(mode="polygon"),
         )
+        if self.load_image:
+            self.show_image(self.image_id)
 
     def set_shape(self, mode):
         """" Set shape of the annotations (circle, ellipse, roi or polygon)"""
@@ -131,9 +132,7 @@ class Annotator(Frame):
 
     def select_delete(self, event):
         """ Selects/deselects the closest annotation and adds/removes 'DELETE' tag"""
-        widget_id = event.widget.find_closest(
-            event.x, event.y, halo=2, start=self.imageid
-        )
+        widget_id = event.widget.find_closest(event.x, event.y, halo=2)
         if len(widget_id):
             if widget_id[0] in self.delete_ids:
                 self.canvas.itemconfigure(widget_id, outline="green")
@@ -145,9 +144,7 @@ class Annotator(Frame):
 
     def select_move(self, event):
         """ Selects/deselects the closest annotation and adds/removes 'MOVE' tag"""
-        widget_id = event.widget.find_closest(
-            event.x, event.y, halo=5, start=self.imageid
-        )
+        widget_id = event.widget.find_closest(event.x, event.y, halo=5)
         if len(widget_id):
             if widget_id[0] in self.move_ids:
                 self.canvas.itemconfigure(widget_id, outline="green")
@@ -261,6 +258,22 @@ class Annotator(Frame):
         if len(self.temp_polygon_point_ids):
             for idx in self.temp_polygon_point_ids:
                 self.canvas.delete(idx)
+
+    def show_image(self, image_id):
+        """ Show image on the Canvas """
+        if image_id:
+            self.canvas.delete(image_id)
+            image_id = None
+            self.canvas.imagetk = None  # delete previous image from the canvas
+        width, height = self.image.size
+        new_size = int(self.imscale * width), int(self.imscale * height)
+        imagetk = ImageTk.PhotoImage(self.image.resize(new_size))
+        # Use self.text object to set proper coordinates
+        image_id = self.canvas.create_image((0, 0), anchor="nw", image=imagetk)
+        self.canvas.lower(image_id)  # set it into background
+        self.canvas.imagetk = (
+            imagetk  # keep an extra reference to prevent garbage-collection
+        )
 
 
 # Main function
