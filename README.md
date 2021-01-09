@@ -5,13 +5,14 @@ Image annotator using tkinter widgets as gui
 - Draw circles, ellipses, regtangles and polygons
 - The annotations can be iteractively drawn
 - The annotations can be moved using the mouse
-- The annotations can be deleted 
+- The annotations can be deleted
+- Create, move and delete annotations as overlay of an image.
 
 ## Feature wish list
 - Load images
 - Save and load annotations as json 
-- Create, move and delete annotations as overlay of an image.
 - Get an overview of the annotations (number, areas. etc)
+- deactivate annotations for the overview
 - Edit annotations after they are made
 - Smart annotations using roi to predict the annotations inside it
 - zoom of image and annotations

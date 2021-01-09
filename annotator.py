@@ -50,7 +50,7 @@ class Annotator(Frame):
         self.master.bind("<Delete>", self.delete_annotation)
 
         # Polygon commands
-        self.master.bind("<Double-Button-1>", self.save_polygons)
+        self.master.bind("<Return>", self.save_polygons)
 
         # Menu options
         self.menubar = Menu(self.master)
@@ -292,6 +292,7 @@ class Annotator(Frame):
 
     def save_polygons(self, event):
         """ Saves current polygon, after this a new polygon can be saved"""
+        print("test")
         self.delete_polygons()
         poly_id = self.draw_polygon_func(self.temp_polygon_points, False)
         self.annotations_dict[f"{poly_id}"] = (self.temp_polygon_points, "polygon")
