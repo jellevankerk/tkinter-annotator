@@ -37,24 +37,18 @@ class Annotator(Frame):
             self.delta = 0.75
             width, height = self.image.size
 
-        # Create annotations
-        self.canvas.bind("<ButtonPress-1>", self.create_annotation)
-        self.canvas.bind("<Motion>", self.motion_create_annotation)
-
-        # Select annotations
-        self.canvas.bind("<Button 2>", self.select_move)
-        self.canvas.bind("<Button 3>", self.select_delete)
-
-        # Actions annotations
-        self.canvas.bind("<B2-Motion>", self.move_annotation)
-        self.master.bind("<Delete>", self.delete_annotation)
-
-        # Polygon commands
-        self.master.bind("<Return>", self.save_polygons)
-
         # Menu options
         self.menubar = Menu(self.master)
         self.shape_options = Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(
+            label="Create", command=lambda: self.set_canvas_mode(mode="create")
+        )
+        self.menubar.add_cascade(
+            label="Move", command=lambda: self.set_canvas_mode(mode="move")
+        )
+        self.menubar.add_cascade(
+            label="Delete", command=lambda: self.set_canvas_mode(mode="delete")
+        )
         self.menubar.add_cascade(label="Options", menu=self.shape_options)
         self.master.config(menu=self.menubar)
 
@@ -78,8 +72,34 @@ class Annotator(Frame):
         if self.load_image:
             self.show_image(self.image_id)
 
+        self.set_canvas_mode("create")
+
+    def set_canvas_mode(self, mode, event=None):
+        self.unbind()
+        self.canvas_mode = mode
+        if len(self.temp_polygon_point_ids):
+            self.save_polygons(None)
+        if mode == "create":
+            # Create annotations
+            self.canvas.bind("<ButtonPress-1>", self.create_annotation)
+            self.canvas.bind("<Motion>", self.motion_create_annotation)
+            self.canvas.bind("<ButtonPress-3>", self.save_polygons)
+        elif mode == "move":
+            self.canvas.bind("<ButtonPress-1>", self.select_move)
+            self.canvas.bind("<Motion>", self.move_annotation)
+        elif mode == "delete":
+            self.canvas.bind("<ButtonPress-1>", self.select_delete)
+            self.canvas.bind("<ButtonPress-3>", self.delete_annotation)
+
+    def unbind(self):
+        self.canvas.unbind("<ButtonPress-1>")
+        self.canvas.unbind("<Motion>")
+        self.canvas.unbind("<ButtonPress 3>")
+
     def set_shape(self, mode):
         """" Set shape of the annotations (circle, ellipse, roi or polygon)"""
+        if len(self.temp_polygon_point_ids):
+            self.save_polygons(None)
         self.mode = mode
 
     def create_annotation(self, event):
@@ -205,6 +225,7 @@ class Annotator(Frame):
                 fill = (
                     "blue"
                     if self.annotations_dict[str(self.move_id)][1] in ["polygon", "roi"]
+                    or self.canvas_mode == "move"
                     else ""
                 )
                 self.canvas.itemconfigure(
@@ -292,12 +313,12 @@ class Annotator(Frame):
 
     def save_polygons(self, event):
         """ Saves current polygon, after this a new polygon can be saved"""
-        print("test")
-        self.delete_polygons()
-        poly_id = self.draw_polygon_func(self.temp_polygon_points, False)
-        self.annotations_dict[f"{poly_id}"] = (self.temp_polygon_points, "polygon")
-        self.temp_polygon_point_ids = []
-        self.temp_polygon_points = []
+        if len(self.temp_polygon_point_ids):
+            self.delete_polygons()
+            poly_id = self.draw_polygon_func(self.temp_polygon_points, False)
+            self.annotations_dict[f"{poly_id}"] = (self.temp_polygon_points, "polygon")
+            self.temp_polygon_point_ids = []
+            self.temp_polygon_points = []
 
     def delete_polygons(self):
         """ Deletes all widged ids of temp_polygon"""
