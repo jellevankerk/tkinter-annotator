@@ -5,7 +5,7 @@ from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
 from utilities import find_coords, scale_image
-from get_shapes import get_circle, get_ellipse, get_roi
+from get_shapes import get_circle, get_ellipse, get_roi, oval2poly
 
 
 class Annotator(Frame):
@@ -127,13 +127,15 @@ class Annotator(Frame):
             mode = self.mode
         if mode == "ellipse":
             x0, y0, x1, y1 = get_ellipse(coord1, coord2)
-            temp_id = self.canvas.create_oval(
-                x0, y0, x1, y1, fill="", outline="green", width=3
+            point_list = oval2poly(x0, y0, x1, y1)
+            temp_id = self.canvas.create_polygon(
+                point_list, fill="green", outline="green", width=3, stipple="gray12"
             )
         elif mode == "circle":
             x0, y0, x1, y1 = get_circle(coord1, coord2)
-            temp_id = self.canvas.create_oval(
-                x0, y0, x1, y1, fill="", outline="green", width=3
+            point_list = oval2poly(x0, y0, x1, y1)
+            temp_id = self.canvas.create_polygon(
+                point_list, fill="green", outline="green", width=3, stipple="gray12"
             )
         elif mode == "roi":
             x0, y0, x1, y1 = get_roi(coord1, coord2)
@@ -156,20 +158,12 @@ class Annotator(Frame):
         widget_id = event.widget.find_closest(event.x, event.y, halo=2)
         if len(widget_id) and widget_id[0] != self.image_id:
             if widget_id[0] in self.delete_ids:
-                fill = (
-                    "green"
-                    if self.annotations_dict[str(widget_id[0])][1] in ["polygon", "roi"]
-                    else ""
-                )
+                fill = "green"
                 self.canvas.itemconfigure(widget_id, outline="green", fill=fill)
                 self.delete_ids.pop(self.delete_ids.index(widget_id[0]))
 
             elif widget_id[0] != self.move_id:
-                fill = (
-                    "red"
-                    if self.annotations_dict[str(widget_id[0])][1] in ["polygon", "roi"]
-                    else ""
-                )
+                fill = "red"
                 self.canvas.itemconfigure(
                     widget_id,
                     tags="DELETE",
@@ -184,23 +178,14 @@ class Annotator(Frame):
 
         if len(widget_id) and widget_id[0] != self.image_id:
             if widget_id[0] == self.move_id:
-                fill = (
-                    "green"
-                    if self.annotations_dict[str(widget_id[0])][1] in ["polygon", "roi"]
-                    else ""
-                )
+                fill = "green"
                 self.canvas.itemconfigure(widget_id, outline="green", fill=fill)
                 self.move_id = None
                 self.move_polygon_points = []
 
             elif widget_id[0] not in self.delete_ids:
                 if not self.move_id:
-                    fill = (
-                        "blue"
-                        if self.annotations_dict[str(widget_id[0])][1]
-                        in ["polygon", "roi"]
-                        else ""
-                    )
+                    fill = "blue"
                     self.canvas.itemconfigure(
                         widget_id, tags=("MOVE"), outline="blue", fill=fill
                     )
@@ -223,12 +208,7 @@ class Annotator(Frame):
                 new_id = self.create_annotation_func(new_coord1, new_coord2, mode)
 
                 self.canvas.delete(self.move_id)
-                fill = (
-                    "blue"
-                    if self.annotations_dict[str(self.move_id)][1] in ["polygon", "roi"]
-                    or self.canvas_mode == "move"
-                    else ""
-                )
+                fill = "blue"
                 self.canvas.itemconfigure(
                     new_id, tags="MOVE", outline="blue", fill=fill
                 )
