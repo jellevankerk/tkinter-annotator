@@ -1,14 +1,15 @@
 import math
+import cv2
 import numpy as np
 from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
-from utilities import find_coords
+from utilities import find_coords, scale_image
 from get_shapes import get_circle, get_ellipse, get_roi
 
 
 class Annotator(Frame):
-    def __init__(self, master, load_image=True, height=500, width=500):
+    def __init__(self, master, load_image=True, height=1000, width=1000):
         self.master = master
         self.load_image = load_image
 
@@ -32,10 +33,10 @@ class Annotator(Frame):
         self.move_polygon_points = []
 
         if self.load_image:
-            self.image = Image.open(filedialog.askopenfilename())
+            self.image = cv2.imread(filedialog.askopenfilename(), 0)
             self.imscale = 1.0
             self.delta = 0.75
-            width, height = self.image.size
+            width, height = self.image.shape
 
         # Menu options
         self.menubar = Menu(self.master)
@@ -332,10 +333,10 @@ class Annotator(Frame):
             self.canvas.delete(image_id)
             image_id = None
             self.canvas.imagetk = None  # delete previous image from the canvas
-        width, height = self.image.size
-        new_size = int(self.imscale * width), int(self.imscale * height)
-        imagetk = ImageTk.PhotoImage(self.image.resize(new_size))
-        # Use self.text object to set proper coordinates
+        imagetk = scale_image(
+            self.image, self.canvas.winfo_width(), self.canvas.winfo_height()
+        )
+
         self.image_id = self.canvas.create_image((0, 0), anchor="nw", image=imagetk)
         self.canvas.lower(self.image_id)  # set it into background
         self.canvas.imagetk = (
