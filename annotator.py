@@ -87,6 +87,7 @@ class Annotator(Frame):
             self.canvas.bind("<ButtonPress-3>", self.save_polygons)
         elif mode == "move":
             self.canvas.bind("<ButtonPress-1>", self.select_move)
+            self.canvas.bind("<B2-Motion>", self.rotated_ellipse)
             self.canvas.bind("<Motion>", self.move_annotation)
         elif mode == "delete":
             self.canvas.bind("<ButtonPress-1>", self.select_delete)
@@ -94,6 +95,7 @@ class Annotator(Frame):
 
     def unbind(self):
         self.canvas.unbind("<ButtonPress-1>")
+        self.canvas.unbind("<B2-Motion>")
         self.canvas.unbind("<Motion>")
         self.canvas.unbind("<ButtonPress 3>")
 
@@ -215,6 +217,41 @@ class Annotator(Frame):
 
                 self.annotations_dict[f"{new_id}"] = (
                     [new_coord1, new_coord2],
+                    mode,
+                )
+                del self.annotations_dict[str(self.move_id)]
+                self.move_id = new_id
+
+    def rotated_ellipse(self, event):
+        if self.move_id:
+            coords, mode = self.annotations_dict[str(self.move_id)]
+            if mode == "ellipse":
+                (x0, y0), (x1, y1) = coords
+                center_x = x1 - x0
+                center_y = y1 - y0
+
+                rotate_x = event.x
+                rotate_y = event.y
+
+                diff_x = rotate_x - center_x
+                diff_y = rotate_y - center_y
+                theta = math.atan((diff_y / diff_x)) * (180 / math.pi)
+                print(theta)
+
+                x0_n, y0_n, x1_n, y1_n = get_ellipse((x0, y0), (x1, y1))
+                point_list = oval2poly(x0_n, y0_n, x1_n, y1_n, rotation=theta)
+                new_id = self.canvas.create_polygon(
+                    point_list, fill="green", outline="green", width=3, stipple="gray12"
+                )
+
+                self.canvas.delete(self.move_id)
+                fill = "blue"
+                self.canvas.itemconfigure(
+                    new_id, tags="MOVE", outline="blue", fill=fill
+                )
+
+                self.annotations_dict[f"{new_id}"] = (
+                    [(x0, y0), (x1, y1)],
                     mode,
                 )
                 del self.annotations_dict[str(self.move_id)]
