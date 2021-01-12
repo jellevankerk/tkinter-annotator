@@ -9,16 +9,13 @@ from get_shapes import get_circle, get_ellipse, get_roi, oval2poly
 
 
 class Annotator(Frame):
-    def __init__(self, master, load_image=True, height=1000, width=1000):
+    def __init__(self, master, height=1000, width=1000):
         self.master = master
-        self.load_image = load_image
-
         self.canvas = Canvas(self.master, height=height, width=width, bg="black")
         self.canvas.pack()
 
         self.mode = "roi"
         self.do_polygon = False
-        self.image_id = None
 
         self.annotations_dict = {}
 
@@ -32,11 +29,17 @@ class Annotator(Frame):
         self.temp_polygon_point_ids = []
         self.move_polygon_points = []
 
-        if self.load_image:
-            self.image = cv2.imread(filedialog.askopenfilename(), 0)
-            self.imscale = 1.0
-            self.delta = 0.75
-            width, height = self.image.shape
+        # Bind events to the Canvas
+        self.canvas.bind("<ButtonPress-2>", self.move_from)
+        self.canvas.bind("<B2-Motion>", self.move_to)
+        self.canvas.bind("<MouseWheel>", self.wheel)
+
+        self.image = Image.open(filedialog.askopenfilename())
+        self.image_id = None
+        self.imscale = 1.0
+        self.delta = 0.75
+        width, height = self.image.size
+        minsize, maxsize = 5, 20
 
         # Menu options
         self.menubar = Menu(self.master)
@@ -70,9 +73,9 @@ class Annotator(Frame):
             label="Polygon",
             command=lambda: self.set_shape(mode="polygon"),
         )
-        if self.load_image:
-            self.show_image(self.image_id)
-
+        self.text = self.canvas.create_text(0, 0)
+        self.show_image()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         self.set_canvas_mode("create")
 
     def set_canvas_mode(self, mode, event=None):
@@ -87,7 +90,7 @@ class Annotator(Frame):
             self.canvas.bind("<ButtonPress-3>", self.save_polygons)
         elif mode == "move":
             self.canvas.bind("<ButtonPress-1>", self.select_move)
-            self.canvas.bind("<B2-Motion>", self.rotated_ellipse)
+            # self.canvas.bind("<B2-Motion>", self.rotated_ellipse)
             self.canvas.bind("<Motion>", self.move_annotation)
         elif mode == "delete":
             self.canvas.bind("<ButtonPress-1>", self.select_delete)
@@ -95,7 +98,7 @@ class Annotator(Frame):
 
     def unbind(self):
         self.canvas.unbind("<ButtonPress-1>")
-        self.canvas.unbind("<B2-Motion>")
+        # self.canvas.unbind("<B2-Motion>")
         self.canvas.unbind("<Motion>")
         self.canvas.unbind("<ButtonPress 3>")
 
@@ -344,21 +347,48 @@ class Annotator(Frame):
             for idx in self.temp_polygon_point_ids:
                 self.canvas.delete(idx)
 
-    def show_image(self, image_id):
+    def show_image(self):
         """ Show image on the Canvas """
-        if image_id:
-            self.canvas.delete(image_id)
-            image_id = None
+        if self.image_id:
+            self.canvas.delete(self.image_id)
+            self.image_id = None
             self.canvas.imagetk = None  # delete previous image from the canvas
-        imagetk = scale_image(
-            self.image, self.canvas.winfo_width(), self.canvas.winfo_height()
+        width, height = self.image.size
+        new_size = int(self.imscale * width), int(self.imscale * height)
+        imagetk = ImageTk.PhotoImage(self.image.resize(new_size))
+        self.image_id = self.canvas.create_image(
+            self.canvas.coords(self.text), anchor="nw", image=imagetk
         )
-
-        self.image_id = self.canvas.create_image((0, 0), anchor="nw", image=imagetk)
         self.canvas.lower(self.image_id)  # set it into background
         self.canvas.imagetk = (
             imagetk  # keep an extra reference to prevent garbage-collection
         )
+
+    def move_from(self, event):
+        """ Remember previous coordinates for scrolling with the mouse """
+        self.canvas.scan_mark(event.x, event.y)
+
+    def move_to(self, event):
+        """ Drag (move) canvas to the new position """
+        self.canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def wheel(self, event):
+        """ Zoom with mouse wheel """
+        scale = 1.0
+
+        # Respond to Linux (event.num) or Windows (event.delta) wheel event
+        if event.delta == -120:
+            scale *= self.delta
+            self.imscale *= self.delta
+        if event.delta == 120:
+            scale /= self.delta
+            self.imscale /= self.delta
+        # Rescale all canvas objects
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        self.canvas.scale("all", x, y, scale, scale)
+        self.show_image()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
 
 # Main function
