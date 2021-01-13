@@ -6,6 +6,7 @@ from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
 from utilities import find_coords, scale_image
 from get_shapes import get_circle, get_ellipse, get_roi, oval2poly
+from data import Annotations
 
 
 class Annotator(Frame):
@@ -30,9 +31,9 @@ class Annotator(Frame):
         self.move_polygon_points = []
 
         # Bind events to the Canvas
-        self.canvas.bind("<ButtonPress-2>", self.move_from)
-        self.canvas.bind("<B2-Motion>", self.move_to)
-        self.canvas.bind("<MouseWheel>", self.wheel)
+        # self.canvas.bind("<ButtonPress-2>", self.move_from)
+        # self.canvas.bind("<B2-Motion>", self.move_to)
+        # self.canvas.bind("<MouseWheel>", self.wheel)
 
         self.image = Image.open(filedialog.askopenfilename())
         self.image_id = None
@@ -363,6 +364,13 @@ class Annotator(Frame):
         self.canvas.imagetk = (
             imagetk  # keep an extra reference to prevent garbage-collection
         )
+
+    def draw_annotations(self):
+        path = filedialog.askopenfilename()
+        annotations = Annotations(path)
+
+        for annotation in annotations:
+            print(annotation)
 
     def move_from(self, event):
         """ Remember previous coordinates for scrolling with the mouse """
