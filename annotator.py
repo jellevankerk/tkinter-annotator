@@ -74,6 +74,9 @@ class Annotator(Frame):
             label="Polygon",
             command=lambda: self.set_shape(mode="polygon"),
         )
+        self.menubar.add_cascade(
+            label="Load annotations", command=self.load_annotations
+        )
         self.text = self.canvas.create_text(0, 0)
         self.show_image()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -365,12 +368,36 @@ class Annotator(Frame):
             imagetk  # keep an extra reference to prevent garbage-collection
         )
 
-    def draw_annotations(self):
+    def load_annotations(self):
         path = filedialog.askopenfilename()
         annotations = Annotations(path)
 
         for annotation in annotations:
-            print(annotation)
+            self.load_annotation(annotation)
+
+    def load_annotation(self, data):
+
+        annotation, mode = data
+
+        if mode == "polygon":
+            print("polygon")
+        elif mode == "ellipse":
+            coord1, coord2 = annotation
+            temp_id = self.load_annotation_func(coord1, coord2, mode=mode)
+
+            self.annotations_dict[f"{temp_id}"] = ((coord1, coord2), mode)
+
+    def load_annotation_func(self, coord1, coord2, mode=None):
+        """ Depending on the mode of the functions draws a circle, ellipse, roi or polygon """
+        if mode == "ellipse":
+            x0, y0 = coord1
+            x1, y1 = coord2
+            point_list = oval2poly(x0, y0, x1, y1)
+            temp_id = self.canvas.create_polygon(
+                point_list, fill="green", outline="green", width=3, stipple="gray12"
+            )
+
+        return temp_id
 
     def move_from(self, event):
         """ Remember previous coordinates for scrolling with the mouse """
