@@ -130,18 +130,29 @@ class Annotator(Frame):
 
                 return temp_id
 
-    def create_annotation_func(self, coord1, coord2, mode=None):
+    def create_annotation_func(
+        self, coord1, coord2, mode=None, start_from_center=False
+    ):
         """ Depending on the mode of the functions draws a circle, ellipse, roi or polygon """
         if not mode:
             mode = self.mode
         if mode == "ellipse":
-            x0, y0, x1, y1 = get_ellipse(coord1, coord2)
+            if start_from_center:
+                x0, y0, x1, y1 = get_ellipse(coord1, coord2)
+            else:
+                x0, y0 = coord1
+                x1, y1 = coord2
+
             point_list = oval2poly(x0, y0, x1, y1)
             temp_id = self.canvas.create_polygon(
                 point_list, fill="green", outline="green", width=3, stipple="gray12"
             )
         elif mode == "circle":
-            x0, y0, x1, y1 = get_circle(coord1, coord2)
+            if start_from_center:
+                x0, y0, x1, y1 = get_circle(coord1, coord2)
+            else:
+                x0, y0 = coord1
+                x1, y1 = coord2
             point_list = oval2poly(x0, y0, x1, y1)
             temp_id = self.canvas.create_polygon(
                 point_list, fill="green", outline="green", width=3, stipple="gray12"
@@ -383,21 +394,9 @@ class Annotator(Frame):
             print("polygon")
         elif mode == "ellipse":
             coord1, coord2 = annotation
-            temp_id = self.load_annotation_func(coord1, coord2, mode=mode)
+            temp_id = self.create_annotation_func(coord1, coord2, mode=mode)
 
             self.annotations_dict[f"{temp_id}"] = ((coord1, coord2), mode)
-
-    def load_annotation_func(self, coord1, coord2, mode=None):
-        """ Depending on the mode of the functions draws a circle, ellipse, roi or polygon """
-        if mode == "ellipse":
-            x0, y0 = coord1
-            x1, y1 = coord2
-            point_list = oval2poly(x0, y0, x1, y1)
-            temp_id = self.canvas.create_polygon(
-                point_list, fill="green", outline="green", width=3, stipple="gray12"
-            )
-
-        return temp_id
 
     def move_from(self, event):
         """ Remember previous coordinates for scrolling with the mouse """
