@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
-from utilities import find_coords, scale_image
+from utilities import find_coords
 from get_shapes import get_circle, get_ellipse, get_roi, oval2poly
 from data import Annotations, convert2json
 
@@ -171,9 +171,9 @@ class Annotator(Frame):
 
     def motion_create_annotation(self, event):
         """ Track mouse position over the canvas """
-        # print("motion", event.x, event.y)
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
+
         if self.motion_id:
             self.canvas.delete(self.motion_id)
         if len(self.anno_coords) == 1 and not self.do_polygon:
@@ -235,7 +235,9 @@ class Annotator(Frame):
                 x = self.canvas.canvasx(event.x)
                 y = self.canvas.canvasy(event.y)
                 new_coord1, new_coord2 = find_coords((x, y), xdim, ydim)
-                new_id = self.create_annotation_func(new_coord1, new_coord2, mode)
+                scaled_coord1 = tuple([x * self.imscale for x in new_coord1])
+                scaled_coord2 = tuple([x * self.imscale for x in new_coord2])
+                new_id = self.create_annotation_func(scaled_coord1, scaled_coord2, mode)
 
                 self.canvas.delete(self.move_id)
                 fill = "blue"
@@ -437,7 +439,6 @@ class Annotator(Frame):
         """ Zoom with mouse wheel """
         scale = 1.0
 
-        # Respond to Linux (event.num) or Windows (event.delta) wheel event
         if event.delta == -120:
             scale *= self.delta
             self.imscale *= self.delta
