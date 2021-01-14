@@ -1,4 +1,5 @@
 import json
+import numpy as np
 from copy import deepcopy  # dont know if this is the correct operation for this
 
 
@@ -71,6 +72,67 @@ class Annotations:
     def __polygon2json(data):
         pass
 
+
+def convert2json(data):
+    annotation, mode = data
+
+    if mode == "ellipse":
+        json_annotation = ellipse2json(annotation)
+    elif mode == "polygon":
+        json_annotation = polygon2json(annotation)
+
+    return json_annotation
+
+
+def ellipse2json(annotation):
+    json_annotation = {}
+    json_annotation["type"] = "ellipse"
+    json_annotation["angleOfRotation"] = 0
+    coord1, coord2 = annotation
+    x0, y0 = coord1
+    x1, y1 = coord2
+
+    radius_x = int(np.floor((x1 - x0) / 2))
+    radius_y = int(np.floor((y0 - y1) / 2))
+    json_annotation["radiusX"] = radius_x
+    json_annotation["radiusY"] = radius_y
+
+    c_x = x0 + radius_x
+    c_y = y1 + radius_y
+
+    json_annotation["center"] = {}
+    json_annotation["center"]["x"] = c_x
+    json_annotation["center"]["y"] = c_y
+
+    return json_annotation
+
+
+def polygon2json(annotation):
+    json_annotation = {}
+    json_annotation["type"] = "polygon"
+
+    points = []
+    for point in annotation:
+        json_point = {}
+        json_point["x"] = point[0]
+        json_point["y"] = point[1]
+        points.append(json_point)
+
+    json_annotation["points"] = points
+
+    return json_annotation
+
+
+{
+    "type": "ellipse",
+    "center": {"x": 1537, "y": 1485},
+    "radiusX": 17,
+    "radiusY": 17,
+    "angleOfRotation": 0,
+    "id": "f195816b-6073-45d1-9b63-654a1cf3b1cc",
+    "accuracy": 0.9693005084991455,
+    "area": 907.9202768874503,
+},
 
 # if __name__ == "__main__":
 #     from tkinter import filedialog

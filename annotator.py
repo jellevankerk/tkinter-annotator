@@ -1,12 +1,13 @@
 import math
 import cv2
+import json
 import numpy as np
 from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
 from utilities import find_coords, scale_image
 from get_shapes import get_circle, get_ellipse, get_roi, oval2poly
-from data import Annotations
+from data import Annotations, convert2json
 
 
 class Annotator(Frame):
@@ -76,6 +77,9 @@ class Annotator(Frame):
         )
         self.menubar.add_cascade(
             label="Load annotations", command=self.load_annotations
+        )
+        self.menubar.add_cascade(
+            label="Save annotations", command=self.save_annotations
         )
         self.text = self.canvas.create_text(0, 0)
         self.show_image()
@@ -401,6 +405,16 @@ class Annotator(Frame):
             temp_id = self.create_annotation_func(coord1, coord2, mode=mode)
 
             self.annotations_dict[f"{temp_id}"] = ((coord1, coord2), mode)
+
+    def save_annotations(self):
+        save_path = filedialog.asksaveasfilename(defaultextension=".json")
+        annotations_json = []
+        for x in self.annotations_dict:
+            annotation = convert2json(self.annotations_dict[x])
+            annotations_json.append(annotation)
+
+        with open(save_path, "w") as f:
+            json.dump(annotations_json, f)
 
     def move_from(self, event):
         """ Remember previous coordinates for scrolling with the mouse """
