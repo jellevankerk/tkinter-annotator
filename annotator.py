@@ -318,7 +318,8 @@ class Annotator(Frame):
         elif n_points == 2:
             temp_id = self.canvas.create_line(centers, fill="green", width=3)
 
-        self.temp_polygon_point_ids.append(temp_id)
+        if do_temp:
+            self.temp_polygon_point_ids.append(temp_id)
         return temp_id
 
     def move_polygon(self, event):
@@ -391,7 +392,10 @@ class Annotator(Frame):
         annotation, mode = data
 
         if mode == "polygon":
-            print("polygon")
+            temp_id = self.draw_polygon_func(annotation, do_temp=False)
+
+            self.annotations_dict[f"{temp_id}"] = (annotation, mode)
+
         elif mode == "ellipse":
             coord1, coord2 = annotation
             temp_id = self.create_annotation_func(coord1, coord2, mode=mode)
