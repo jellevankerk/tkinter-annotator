@@ -32,9 +32,9 @@ class Annotator(Frame):
         self.move_polygon_points = []
 
         # Bind events to the Canvas
-        # self.canvas.bind("<ButtonPress-2>", self.move_from)
-        # self.canvas.bind("<B2-Motion>", self.move_to)
-        # self.canvas.bind("<MouseWheel>", self.wheel)
+        self.canvas.bind("<ButtonPress-2>", self.move_from)
+        self.canvas.bind("<B2-Motion>", self.move_to)
+        self.canvas.bind("<MouseWheel>", self.wheel)
 
         self.image = Image.open(filedialog.askopenfilename())
         self.image_id = None
@@ -121,8 +121,9 @@ class Annotator(Frame):
         if self.mode == "polygon":
             self.draw_polygon(event)
         else:
-            center_x, center_y = event.x, event.y
-            self.anno_coords.append([center_x, center_y])
+            x = self.canvas.canvasx(event.x)
+            y = self.canvas.canvasy(event.y)
+            self.anno_coords.append([x, y])
 
             if len(self.anno_coords) >= 2:
                 temp_id = self.create_annotation_func(
@@ -170,6 +171,7 @@ class Annotator(Frame):
 
     def motion_create_annotation(self, event):
         """ Track mouse position over the canvas """
+        # print("motion", event.x, event.y)
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
         if self.motion_id:
@@ -179,7 +181,9 @@ class Annotator(Frame):
 
     def select_delete(self, event):
         """ Selects/deselects the closest annotation and adds/removes 'DELETE' tag"""
-        widget_id = event.widget.find_closest(event.x, event.y, halo=2)
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        widget_id = event.widget.find_closest(x, y, halo=2)
         if len(widget_id) and widget_id[0] != self.image_id:
             if widget_id[0] in self.delete_ids:
                 fill = "green"
@@ -228,7 +232,9 @@ class Annotator(Frame):
                 ydim = abs(coords[0][1] - coords[1][1])
 
                 # Create new annotations at new location
-                new_coord1, new_coord2 = find_coords((event.x, event.y), xdim, ydim)
+                x = self.canvas.canvasx(event.x)
+                y = self.canvas.canvasy(event.y)
+                new_coord1, new_coord2 = find_coords((x, y), xdim, ydim)
                 new_id = self.create_annotation_func(new_coord1, new_coord2, mode)
 
                 self.canvas.delete(self.move_id)
@@ -287,8 +293,9 @@ class Annotator(Frame):
     def draw_polygon(self, event):
         """ Draws polygons"""
         self.delete_polygons()
-
-        center_x, center_y = event.x, event.y
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        center_x, center_y = x, y
         self.temp_polygon_points.append((center_x, center_y))
 
         dots = self.draw_points(self.temp_polygon_points)
@@ -333,7 +340,9 @@ class Annotator(Frame):
 
         dots_array = np.array(self.move_polygon_points)
         center = np.average(dots_array, 0)
-        move = np.array([event.x, event.y]) - center
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        move = np.array([x, y]) - center
         dots_centers = [
             [x[0] + move[0], x[1] + move[1]] for x in self.move_polygon_points
         ]
