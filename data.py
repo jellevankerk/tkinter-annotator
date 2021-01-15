@@ -1,17 +1,20 @@
 import json
+import uuid
 import numpy as np
 from copy import deepcopy  # dont know if this is the correct operation for this
 
 
 class Annotations:
     def __init__(self):
-        self.annotations = []
+        self.annotations = {}
+        self.ids = []
 
     def __len__(self):
         return len(self.annotations)
 
     def __getitem__(self, index):
-        return self.annotations[index]
+        idx = self.ids[index]
+        return self.annotations[idx]
 
     def load_annotations(self, path):
         with open(path, "r") as f:
@@ -21,16 +24,23 @@ class Annotations:
     def __convert2tkinter_format(self, annotations):
         copy_annotations = deepcopy(annotations)
         for annotation in copy_annotations:
+            if "id" in annotation:
+                idx = annotation["id"]
+            else:
+                idx = str(uuid.uuid4())
+            self.ids.append(idx)
+
             if annotation["type"] == "ellipse" or annotation["type"] == "circle":
-                self.annotations.append(
-                    self.__ellipse2tkinter(annotation, annotation["type"])
+
+                self.annotations[idx] = self.__ellipse2tkinter(
+                    annotation, annotation["type"]
                 )
 
             elif annotation["type"] == "polygon":
-                self.annotations.append(self.__polygon2tkinter(annotation))
+                self.annotations[idx] = self.__polygon2tkinter(annotation)
 
             elif annotation["type"] == "rectangle":
-                self.annotations.append(self.__rectangle2tkinter(annotation))
+                self.annotations[idx] = self.__rectangle2tkinter(annotation)
             else:
                 raise ValueError(f" Mode {annotation['type']} is not supported")
 
