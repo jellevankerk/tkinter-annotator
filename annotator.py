@@ -348,12 +348,20 @@ class Annotator(Frame):
         center = np.average(dots_array, 0)
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
+
+        move_scaled = np.array([x, y]) - center * self.imscale
+        scaled_centers = [
+            [x[0] * self.imscale + move_scaled[0], x[1] * self.imscale + move_scaled[1]]
+            for x in self.move_polygon_points
+        ]
+
         move = np.array([x, y]) - center
         dots_centers = [
             [x[0] + move[0], x[1] + move[1]] for x in self.move_polygon_points
         ]
+
         new_poly_id = self.canvas.create_polygon(
-            dots_centers,
+            scaled_centers,
             fill="blue",
             tags="MOVE",
             outline="blue",
