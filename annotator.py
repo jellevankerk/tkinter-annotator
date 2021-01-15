@@ -16,7 +16,7 @@ class Annotator(Frame):
         self.canvas = Canvas(self.master, height=height, width=width, bg="black")
         self.canvas.pack()
 
-        self.mode = "roi"
+        self.mode = "ellipse"
         self.do_polygon = False
 
         self.annotations_dict = {}
@@ -298,6 +298,7 @@ class Annotator(Frame):
         """ Deletes all canvas objects with the tag 'DELETE'"""
         for idx in self.canvas.find_withtag("DELETE"):
             self.canvas.delete(idx)
+            del self.annotations_dict[str(idx)]
 
     def draw_polygon(self, event):
         """ Draws polygons"""
@@ -383,7 +384,11 @@ class Annotator(Frame):
         if len(self.temp_polygon_point_ids):
             self.delete_polygons()
             poly_id = self.draw_polygon_func(self.temp_polygon_points, False)
-            self.annotations_dict[f"{poly_id}"] = (self.temp_polygon_points, "polygon")
+            coords = [
+                (x[0] / self.imscale, x[1] / self.imscale)
+                for x in self.temp_polygon_points
+            ]
+            self.annotations_dict[f"{poly_id}"] = (coords, "polygon")
             self.temp_polygon_point_ids = []
             self.temp_polygon_points = []
 
@@ -392,6 +397,7 @@ class Annotator(Frame):
         if len(self.temp_polygon_point_ids):
             for idx in self.temp_polygon_point_ids:
                 self.canvas.delete(idx)
+                del self.annotations_dict[str(idx)]
 
     def show_image(self):
         """ Show image on the Canvas """
@@ -420,23 +426,28 @@ class Annotator(Frame):
     def load_annotation(self, data):
 
         annotation, mode = data
+        x, y = self.canvas.coords(self.text)
+        annotation_scale = [
+            (x + i[0] * self.imscale, y + i[1] * self.imscale) for i in annotation
+        ]
 
         if mode == "polygon":
-            temp_id = self.draw_polygon_func(annotation, do_temp=False)
+            temp_id = self.draw_polygon_func(annotation_scale, do_temp=False)
 
             self.annotations_dict[f"{temp_id}"] = (annotation, mode)
 
         elif mode == "ellipse":
-            coord1, coord2 = annotation
+            coord1, coord2 = annotation_scale
             temp_id = self.create_annotation_func(coord1, coord2, mode=mode)
+            coord1, coord2 = annotation
 
             self.annotations_dict[f"{temp_id}"] = ((coord1, coord2), mode)
 
     def save_annotations(self):
         save_path = filedialog.asksaveasfilename(defaultextension=".json")
         annotations_json = []
-        for x in self.annotations_dict:
-            annotation = convert2json(self.annotations_dict[x])
+        for i in self.annotations_dict:
+            annotation = convert2json(self.annotations_dict[i])
             annotations_json.append(annotation)
 
         with open(save_path, "w") as f:

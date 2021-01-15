@@ -92,8 +92,8 @@ def ellipse2json(annotation):
     x0, y0 = coord1
     x1, y1 = coord2
 
-    radius_x = int(np.floor((x1 - x0) / 2))
-    radius_y = int(np.floor((y0 - y1) / 2))
+    radius_x = int(np.floor(np.abs((x1 - x0) / 2)))
+    radius_y = int(np.floor(np.abs((y1 - y0) / 2)))
     json_annotation["radiusX"] = radius_x
     json_annotation["radiusY"] = radius_y
 
