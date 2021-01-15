@@ -130,7 +130,10 @@ class Annotator(Frame):
                     self.anno_coords[0], self.anno_coords[1]
                 )
 
-                self.annotations_dict[f"{temp_id}"] = (self.anno_coords, self.mode)
+                coords = [
+                    (x[0] / self.imscale, x[1] / self.imscale) for x in self.anno_coords
+                ]
+                self.annotations_dict[f"{temp_id}"] = (coords, self.mode)
                 self.anno_coords = []
 
                 return temp_id
