@@ -80,18 +80,19 @@ class Annotations:
 def convert2json(data):
     annotation, mode = data
 
-    if mode == "ellipse":
-        json_annotation = ellipse2json(annotation)
+    if mode == "ellipse" or mode == "circle":
+        json_annotation = circle2json(annotation, mode)
     elif mode == "polygon":
         json_annotation = polygon2json(annotation)
 
     return json_annotation
 
 
-def ellipse2json(annotation):
+def circle2json(annotation, annotation_type):
     json_annotation = {}
-    json_annotation["type"] = "ellipse"
+    json_annotation["type"] = annotation_type
     json_annotation["angleOfRotation"] = 0
+
     coord1, coord2 = annotation
     x0, y0 = coord1
     x1, y1 = coord2

@@ -388,7 +388,6 @@ class Annotator(Frame):
         if len(self.temp_polygon_point_ids):
             for idx in self.temp_polygon_point_ids:
                 self.canvas.delete(idx)
-                del self.annotations_dict[str(idx)]
 
     def show_image(self):
         """ Show image on the Canvas """
@@ -427,7 +426,7 @@ class Annotator(Frame):
 
             self.annotations_dict[f"{temp_id}"] = (annotation, mode)
 
-        elif mode == "ellipse":
+        elif mode == "ellipse" or mode == "circle":
             coord1, coord2 = annotation_scale
             temp_id = self.create_annotation_func(coord1, coord2, mode=mode)
             coord1, coord2 = annotation
