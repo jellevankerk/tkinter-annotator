@@ -138,29 +138,20 @@ class Annotator(Frame):
 
                 return temp_id
 
-    def create_annotation_func(
-        self, coord1, coord2, mode=None, start_from_center=False
-    ):
+    def create_annotation_func(self, coord1, coord2, mode=None):
         """ Depending on the mode of the functions draws a circle, ellipse, roi or polygon """
         if not mode:
             mode = self.mode
         if mode == "ellipse":
-            if start_from_center:
-                x0, y0, x1, y1 = get_ellipse(coord1, coord2)
-            else:
-                x0, y0 = coord1
-                x1, y1 = coord2
+            x0, y0, x1, y1 = get_ellipse(coord1, coord2)
 
             point_list = oval2poly(x0, y0, x1, y1)
             temp_id = self.canvas.create_polygon(
                 point_list, fill="green", outline="green", width=3, stipple="gray12"
             )
         elif mode == "circle":
-            if start_from_center:
-                x0, y0, x1, y1 = get_circle(coord1, coord2)
-            else:
-                x0, y0 = coord1
-                x1, y1 = coord2
+            x0, y0, x1, y1 = get_circle(coord1, coord2)
+
             point_list = oval2poly(x0, y0, x1, y1)
             temp_id = self.canvas.create_polygon(
                 point_list, fill="green", outline="green", width=3, stipple="gray12"

@@ -46,7 +46,11 @@ class Annotations:
 
         coord1 = (center_x - radius_x, center_y + radius_y)
         coord2 = (center_x + radius_x, center_y - radius_y)
-        return ((coord1, coord2), "ellipse")
+        # return ((coord1, coord2), "ellipse")
+        return (
+            ((center_x, center_y), (center_x + radius_x, center_y + radius_y)),
+            "ellipse",
+        )
 
     @staticmethod
     def __polygon2tkinter(data):
@@ -92,17 +96,14 @@ def ellipse2json(annotation):
     x0, y0 = coord1
     x1, y1 = coord2
 
-    radius_x = int(np.floor(np.abs((x1 - x0) / 2)))
-    radius_y = int(np.floor(np.abs((y1 - y0) / 2)))
+    radius_x = int(np.floor(np.abs((x1 - x0))))
+    radius_y = int(np.floor(np.abs((y1 - y0))))
     json_annotation["radiusX"] = radius_x
     json_annotation["radiusY"] = radius_y
 
-    c_x = x0 + radius_x
-    c_y = y1 + radius_y
-
     json_annotation["center"] = {}
-    json_annotation["center"]["x"] = c_x
-    json_annotation["center"]["y"] = c_y
+    json_annotation["center"]["x"] = x0
+    json_annotation["center"]["y"] = y0
 
     return json_annotation
 
