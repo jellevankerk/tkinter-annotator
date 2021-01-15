@@ -235,8 +235,12 @@ class Annotator(Frame):
                 x = self.canvas.canvasx(event.x)
                 y = self.canvas.canvasy(event.y)
                 new_coord1, new_coord2 = find_coords((x, y), xdim, ydim)
-                scaled_coord1 = tuple([x * self.imscale for x in new_coord1])
-                scaled_coord2 = tuple([x * self.imscale for x in new_coord2])
+                scaled_coord1, scaled_coord2 = find_coords(
+                    (x, y),
+                    xdim * self.imscale,
+                    ydim * self.imscale,
+                )
+
                 new_id = self.create_annotation_func(scaled_coord1, scaled_coord2, mode)
 
                 self.canvas.delete(self.move_id)
