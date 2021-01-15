@@ -6,7 +6,7 @@ from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
 from utilities import find_coords
-from get_shapes import get_circle, get_ellipse, get_roi, oval2poly
+from get_shapes import get_circle, get_ellipse, get_rectangle, oval2poly
 from data import Annotations, convert2json
 
 
@@ -68,8 +68,8 @@ class Annotator(Frame):
             command=lambda: self.set_shape(mode="ellipse"),
         )
         self.shape_options.add_command(
-            label="Roi",
-            command=lambda: self.set_shape(mode="roi"),
+            label="Rectangle",
+            command=lambda: self.set_shape(mode="rectangle"),
         )
         self.shape_options.add_command(
             label="Polygon",
@@ -111,7 +111,7 @@ class Annotator(Frame):
         self.canvas.unbind("<ButtonPress 3>")
 
     def set_shape(self, mode):
-        """" Set shape of the annotations (circle, ellipse, roi or polygon)"""
+        """" Set shape of the annotations (circle, ellipse, rectangle or polygon)"""
         if len(self.temp_polygon_point_ids):
             self.save_polygons(None)
         self.mode = mode
@@ -139,7 +139,7 @@ class Annotator(Frame):
                 return temp_id
 
     def create_annotation_func(self, coord1, coord2, mode=None):
-        """ Depending on the mode of the functions draws a circle, ellipse, roi or polygon """
+        """ Depending on the mode of the functions draws a circle, ellipse, rectangle or polygon """
         if not mode:
             mode = self.mode
         if mode == "ellipse":
@@ -156,8 +156,8 @@ class Annotator(Frame):
             temp_id = self.canvas.create_polygon(
                 point_list, fill="green", outline="green", width=3, stipple="gray12"
             )
-        elif mode == "roi":
-            x0, y0, x1, y1 = get_roi(coord1, coord2)
+        elif mode == "rectangle":
+            x0, y0, x1, y1 = get_rectangle(coord1, coord2)
             temp_id = self.canvas.create_rectangle(
                 x0, y0, x1, y1, fill="green", outline="green", width=3, stipple="gray12"
             )
@@ -426,7 +426,7 @@ class Annotator(Frame):
 
             self.annotations_dict[f"{temp_id}"] = (annotation, mode)
 
-        elif mode == "ellipse" or mode == "circle":
+        else:
             coord1, coord2 = annotation_scale
             temp_id = self.create_annotation_func(coord1, coord2, mode=mode)
             coord1, coord2 = annotation

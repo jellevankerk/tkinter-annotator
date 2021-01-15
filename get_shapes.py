@@ -46,7 +46,7 @@ def get_circle(coord1, coord2):
     return x0, y0, x1, y1
 
 
-def get_roi(coord1, coord2):
+def get_rectangle(coord1, coord2):
     """
     Returns the topleft (x0, y0) and bottomright (x1, y1) coordinates of a region of interest (rectangle)
     For example, the rectangle specified by top left corner (100,100) and bottom right corner (102,102)

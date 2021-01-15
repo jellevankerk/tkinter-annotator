@@ -23,20 +23,23 @@ class Annotations:
         tkinter_annotations = []
         copy_annotations = deepcopy(annotations)
         for annotation in copy_annotations:
-            if annotation["type"] == "ellipse":
-                tkinter_annotations.append(self.__ellipse2tkinter(annotation))
+            if annotation["type"] == "ellipse" or annotation["type"] == "circle":
+                tkinter_annotations.append(
+                    self.__ellipse2tkinter(annotation, annotation["type"])
+                )
 
             elif annotation["type"] == "polygon":
                 tkinter_annotations.append(self.__polygon2tkinter(annotation))
 
+            elif annotation["type"] == "rectangle":
+                tkinter_annotations.append(self.__rectangle2tkinter(annotation))
             else:
-                # These types are not yet implemented
-                continue
+                raise ValueError(f" Mode {annotation['type']} is not supported")
 
         return tkinter_annotations
 
     @staticmethod
-    def __ellipse2tkinter(data):
+    def __ellipse2tkinter(data, mode):
         radius_x, radius_y = data["radiusX"], data["radiusY"]
 
         center_x, center_y = (
@@ -44,12 +47,9 @@ class Annotations:
             data["center"]["y"],
         )
 
-        coord1 = (center_x - radius_x, center_y + radius_y)
-        coord2 = (center_x + radius_x, center_y - radius_y)
-        # return ((coord1, coord2), "ellipse")
         return (
             ((center_x, center_y), (center_x + radius_x, center_y + radius_y)),
-            "ellipse",
+            mode,
         )
 
     @staticmethod
@@ -57,6 +57,14 @@ class Annotations:
         points = [(point["x"], point["y"]) for point in data["points"]]
 
         return (points, "polygon")
+
+    @staticmethod
+    def __rectangle2tkinter(data):
+        x_coord, y_coord = data["coords"]
+        width = data["width"]
+        height = data["height"]
+
+        return (((x_coord, y_coord), (x_coord + width, y_coord + height)), "rectangle")
 
     def add_annotation(self, annotation):
         pass
@@ -81,14 +89,18 @@ def convert2json(data):
     annotation, mode = data
 
     if mode == "ellipse" or mode == "circle":
-        json_annotation = circle2json(annotation, mode)
+        json_annotation = ellipse2json(annotation, mode)
     elif mode == "polygon":
         json_annotation = polygon2json(annotation)
+    elif mode == "rectangle":
+        json_annotation = rectangle2json(annotation)
+    else:
+        raise ValueError(f"Mode {mode} is not supported")
 
     return json_annotation
 
 
-def circle2json(annotation, annotation_type):
+def ellipse2json(annotation, annotation_type):
     json_annotation = {}
     json_annotation["type"] = annotation_type
     json_annotation["angleOfRotation"] = 0
@@ -125,20 +137,13 @@ def polygon2json(annotation):
     return json_annotation
 
 
-{
-    "type": "ellipse",
-    "center": {"x": 1537, "y": 1485},
-    "radiusX": 17,
-    "radiusY": 17,
-    "angleOfRotation": 0,
-    "id": "f195816b-6073-45d1-9b63-654a1cf3b1cc",
-    "accuracy": 0.9693005084991455,
-    "area": 907.9202768874503,
-},
+def rectangle2json(annotation):
+    json_annotation = {}
+    json_annotation["type"] = "rectangle"
 
-# if __name__ == "__main__":
-#     from tkinter import filedialog
+    coord1, coord2 = annotation
 
-#     path = filedialog.askopenfilename()
-#     A = Annotations(path)
-#     print(1)
+    json_annotation["coords"] = coord1
+    json_annotation["width"] = coord2[0] - coord1[0]
+    json_annotation["height"] = coord2[1] - coord1[1]
+    return json_annotation
