@@ -20,6 +20,7 @@ class Annotator(Frame):
         self.do_polygon = False
 
         self.annotations_dict = {}
+        self.Data = Annotations()
 
         self.delete_ids = []
         self.move_id = None
@@ -408,9 +409,9 @@ class Annotator(Frame):
 
     def load_annotations(self):
         path = filedialog.askopenfilename()
-        annotations = Annotations(path)
+        self.Data.load_annotations(path=path)
 
-        for annotation in annotations:
+        for annotation in self.Data:
             self.load_annotation(annotation)
 
     def load_annotation(self, data):

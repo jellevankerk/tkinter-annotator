@@ -4,9 +4,8 @@ from copy import deepcopy  # dont know if this is the correct operation for this
 
 
 class Annotations:
-    def __init__(self, json_path):
-        self.annotations_json = self.__load_annotations(json_path)
-        self.annotations = self.__convert2tkinter_format(self.annotations_json)
+    def __init__(self):
+        self.annotations = []
 
     def __len__(self):
         return len(self.annotations)
@@ -14,29 +13,26 @@ class Annotations:
     def __getitem__(self, index):
         return self.annotations[index]
 
-    def __load_annotations(self, path):
+    def load_annotations(self, path):
         with open(path, "r") as f:
             annotations = json.load(f)
-        return annotations
+        self.__convert2tkinter_format(annotations)
 
     def __convert2tkinter_format(self, annotations):
-        tkinter_annotations = []
         copy_annotations = deepcopy(annotations)
         for annotation in copy_annotations:
             if annotation["type"] == "ellipse" or annotation["type"] == "circle":
-                tkinter_annotations.append(
+                self.annotations.append(
                     self.__ellipse2tkinter(annotation, annotation["type"])
                 )
 
             elif annotation["type"] == "polygon":
-                tkinter_annotations.append(self.__polygon2tkinter(annotation))
+                self.annotations.append(self.__polygon2tkinter(annotation))
 
             elif annotation["type"] == "rectangle":
-                tkinter_annotations.append(self.__rectangle2tkinter(annotation))
+                self.annotations.append(self.__rectangle2tkinter(annotation))
             else:
                 raise ValueError(f" Mode {annotation['type']} is not supported")
-
-        return tkinter_annotations
 
     @staticmethod
     def __ellipse2tkinter(data, mode):
