@@ -31,6 +31,7 @@ class Annotator(Frame):
         self.anno_coords_save = []
 
         self.temp_polygon_points = []
+        self.temp_polygon_points_norm = []
         self.temp_polygon_point_ids = []
         self.move_polygon_points = []
 
@@ -135,9 +136,6 @@ class Annotator(Frame):
                     self.anno_coords[0], self.anno_coords[1]
                 )
 
-                coords = [
-                    (x[0] / self.imscale, x[1] / self.imscale) for x in self.anno_coords
-                ]
                 self.annotations_dict[f"{temp_id}"] = (self.anno_coords_save, self.mode)
                 self.anno_coords = []
                 self.anno_coords_save = []
@@ -304,8 +302,9 @@ class Annotator(Frame):
         self.delete_polygons()
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
-        center_x, center_y = x, y
-        self.temp_polygon_points.append((center_x, center_y))
+        norm_x, norm_y = self.get_coords(event)
+        self.temp_polygon_points.append((x, y))
+        self.temp_polygon_points_norm.append((norm_x, norm_y))
 
         dots = self.draw_points(self.temp_polygon_points)
         self.temp_polygon_point_ids.extend(dots)
@@ -351,6 +350,7 @@ class Annotator(Frame):
         center = np.average(dots_array, 0)
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
+        norm_x, norm_y = self.get_coords(event)
 
         move_scaled = np.array([x, y]) - center * self.imscale
         scaled_centers = [
@@ -358,7 +358,7 @@ class Annotator(Frame):
             for x in self.move_polygon_points
         ]
 
-        move = np.array([x, y]) - center
+        move = np.array([norm_x, norm_y]) - center
         dots_centers = [
             [x[0] + move[0], x[1] + move[1]] for x in self.move_polygon_points
         ]
@@ -383,13 +383,13 @@ class Annotator(Frame):
         if len(self.temp_polygon_point_ids):
             self.delete_polygons()
             poly_id = self.draw_polygon_func(self.temp_polygon_points, False)
-            coords = [
-                (x[0] / self.imscale, x[1] / self.imscale)
-                for x in self.temp_polygon_points
-            ]
-            self.annotations_dict[f"{poly_id}"] = (coords, "polygon")
+            self.annotations_dict[f"{poly_id}"] = (
+                self.temp_polygon_points_norm,
+                "polygon",
+            )
             self.temp_polygon_point_ids = []
             self.temp_polygon_points = []
+            self.temp_polygon_points_norm = []
 
     def delete_polygons(self):
         """ Deletes all widged ids of temp_polygon"""
