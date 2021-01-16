@@ -1,41 +1,51 @@
 import math
+import uuid
+import cv2
+import json
 import numpy as np
 from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
 from utilities import find_coords
-from get_shapes import get_circle, get_ellipse, get_roi
+from get_shapes import get_circle, get_ellipse, get_rectangle, oval2poly
+from data import Annotations, convert2json
 
 
 class Annotator(Frame):
-    def __init__(self, master, load_image=True, height=500, width=500):
+    def __init__(self, master, height=1000, width=1000):
         self.master = master
-        self.load_image = load_image
-
         self.canvas = Canvas(self.master, height=height, width=width, bg="black")
         self.canvas.pack()
 
-        self.mode = "roi"
+        self.mode = "circle"
         self.do_polygon = False
-        self.image_id = None
 
         self.annotations_dict = {}
+        self.Data = Annotations()
 
         self.delete_ids = []
         self.move_id = None
 
         self.motion_id = None
         self.anno_coords = []
+        self.anno_coords_save = []
 
         self.temp_polygon_points = []
+        self.temp_polygon_points_norm = []
         self.temp_polygon_point_ids = []
         self.move_polygon_points = []
 
-        if self.load_image:
-            self.image = Image.open(filedialog.askopenfilename())
-            self.imscale = 1.0
-            self.delta = 0.75
-            width, height = self.image.size
+        # Bind events to the Canvas
+        self.canvas.bind("<ButtonPress-2>", self.move_from)
+        self.canvas.bind("<B2-Motion>", self.move_to)
+        self.canvas.bind("<MouseWheel>", self.wheel)
+
+        self.image = Image.open(filedialog.askopenfilename())
+        self.image_id = None
+        self.imscale = 1.0
+        self.delta = 0.75
+        width, height = self.image.size
+        minsize, maxsize = 5, 20
 
         # Menu options
         self.menubar = Menu(self.master)
@@ -62,16 +72,22 @@ class Annotator(Frame):
             command=lambda: self.set_shape(mode="ellipse"),
         )
         self.shape_options.add_command(
-            label="Roi",
-            command=lambda: self.set_shape(mode="roi"),
+            label="Rectangle",
+            command=lambda: self.set_shape(mode="rectangle"),
         )
         self.shape_options.add_command(
             label="Polygon",
             command=lambda: self.set_shape(mode="polygon"),
         )
-        if self.load_image:
-            self.show_image(self.image_id)
-
+        self.menubar.add_cascade(
+            label="Load annotations", command=self.load_annotations
+        )
+        self.menubar.add_cascade(
+            label="Save annotations", command=self.save_annotations
+        )
+        self.text = self.canvas.create_text(0, 0)
+        self.show_image()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         self.set_canvas_mode("create")
 
     def set_canvas_mode(self, mode, event=None):
@@ -86,6 +102,7 @@ class Annotator(Frame):
             self.canvas.bind("<ButtonPress-3>", self.save_polygons)
         elif mode == "move":
             self.canvas.bind("<ButtonPress-1>", self.select_move)
+            # self.canvas.bind("<B2-Motion>", self.rotated_ellipse)
             self.canvas.bind("<Motion>", self.move_annotation)
         elif mode == "delete":
             self.canvas.bind("<ButtonPress-1>", self.select_delete)
@@ -93,11 +110,12 @@ class Annotator(Frame):
 
     def unbind(self):
         self.canvas.unbind("<ButtonPress-1>")
+        # self.canvas.unbind("<B2-Motion>")
         self.canvas.unbind("<Motion>")
         self.canvas.unbind("<ButtonPress 3>")
 
     def set_shape(self, mode):
-        """" Set shape of the annotations (circle, ellipse, roi or polygon)"""
+        """" Set shape of the annotations (circle, ellipse, rectangle or polygon)"""
         if len(self.temp_polygon_point_ids):
             self.save_polygons(None)
         self.mode = mode
@@ -107,35 +125,43 @@ class Annotator(Frame):
         if self.mode == "polygon":
             self.draw_polygon(event)
         else:
-            center_x, center_y = event.x, event.y
-            self.anno_coords.append([center_x, center_y])
+            x = self.canvas.canvasx(event.x)
+            y = self.canvas.canvasy(event.y)
+            self.anno_coords.append([x, y])
+            x, y = self.get_coords(event)
+            self.anno_coords_save.append([x, y])
 
             if len(self.anno_coords) >= 2:
                 temp_id = self.create_annotation_func(
                     self.anno_coords[0], self.anno_coords[1]
                 )
 
-                self.annotations_dict[f"{temp_id}"] = (self.anno_coords, self.mode)
+                self.annotations_dict[f"{temp_id}"] = (self.anno_coords_save, self.mode)
                 self.anno_coords = []
+                self.anno_coords_save = []
 
                 return temp_id
 
     def create_annotation_func(self, coord1, coord2, mode=None):
-        """ Depending on the mode of the functions draws a circle, ellipse, roi or polygon """
+        """ Depending on the mode of the functions draws a circle, ellipse, rectangle or polygon """
         if not mode:
             mode = self.mode
         if mode == "ellipse":
             x0, y0, x1, y1 = get_ellipse(coord1, coord2)
-            temp_id = self.canvas.create_oval(
-                x0, y0, x1, y1, fill="", outline="green", width=3
+
+            point_list = oval2poly(x0, y0, x1, y1)
+            temp_id = self.canvas.create_polygon(
+                point_list, fill="green", outline="green", width=3, stipple="gray12"
             )
         elif mode == "circle":
             x0, y0, x1, y1 = get_circle(coord1, coord2)
-            temp_id = self.canvas.create_oval(
-                x0, y0, x1, y1, fill="", outline="green", width=3
+
+            point_list = oval2poly(x0, y0, x1, y1)
+            temp_id = self.canvas.create_polygon(
+                point_list, fill="green", outline="green", width=3, stipple="gray12"
             )
-        elif mode == "roi":
-            x0, y0, x1, y1 = get_roi(coord1, coord2)
+        elif mode == "rectangle":
+            x0, y0, x1, y1 = get_rectangle(coord1, coord2)
             temp_id = self.canvas.create_rectangle(
                 x0, y0, x1, y1, fill="green", outline="green", width=3, stipple="gray12"
             )
@@ -145,6 +171,7 @@ class Annotator(Frame):
         """ Track mouse position over the canvas """
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
+
         if self.motion_id:
             self.canvas.delete(self.motion_id)
         if len(self.anno_coords) == 1 and not self.do_polygon:
@@ -152,23 +179,17 @@ class Annotator(Frame):
 
     def select_delete(self, event):
         """ Selects/deselects the closest annotation and adds/removes 'DELETE' tag"""
-        widget_id = event.widget.find_closest(event.x, event.y, halo=2)
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        widget_id = event.widget.find_closest(x, y, halo=2)
         if len(widget_id) and widget_id[0] != self.image_id:
             if widget_id[0] in self.delete_ids:
-                fill = (
-                    "green"
-                    if self.annotations_dict[str(widget_id[0])][1] in ["polygon", "roi"]
-                    else ""
-                )
+                fill = "green"
                 self.canvas.itemconfigure(widget_id, outline="green", fill=fill)
                 self.delete_ids.pop(self.delete_ids.index(widget_id[0]))
 
             elif widget_id[0] != self.move_id:
-                fill = (
-                    "red"
-                    if self.annotations_dict[str(widget_id[0])][1] in ["polygon", "roi"]
-                    else ""
-                )
+                fill = "red"
                 self.canvas.itemconfigure(
                     widget_id,
                     tags="DELETE",
@@ -183,23 +204,14 @@ class Annotator(Frame):
 
         if len(widget_id) and widget_id[0] != self.image_id:
             if widget_id[0] == self.move_id:
-                fill = (
-                    "green"
-                    if self.annotations_dict[str(widget_id[0])][1] in ["polygon", "roi"]
-                    else ""
-                )
+                fill = "green"
                 self.canvas.itemconfigure(widget_id, outline="green", fill=fill)
                 self.move_id = None
                 self.move_polygon_points = []
 
             elif widget_id[0] not in self.delete_ids:
                 if not self.move_id:
-                    fill = (
-                        "blue"
-                        if self.annotations_dict[str(widget_id[0])][1]
-                        in ["polygon", "roi"]
-                        else ""
-                    )
+                    fill = "blue"
                     self.canvas.itemconfigure(
                         widget_id, tags=("MOVE"), outline="blue", fill=fill
                     )
@@ -218,16 +230,21 @@ class Annotator(Frame):
                 ydim = abs(coords[0][1] - coords[1][1])
 
                 # Create new annotations at new location
-                new_coord1, new_coord2 = find_coords((event.x, event.y), xdim, ydim)
-                new_id = self.create_annotation_func(new_coord1, new_coord2, mode)
+
+                x, y = self.get_coords(event)
+                new_coord1, new_coord2 = find_coords((x, y), xdim, ydim)
+                x = self.canvas.canvasx(event.x)
+                y = self.canvas.canvasy(event.y)
+                scaled_coord1, scaled_coord2 = find_coords(
+                    (x, y),
+                    xdim * self.imscale,
+                    ydim * self.imscale,
+                )
+
+                new_id = self.create_annotation_func(scaled_coord1, scaled_coord2, mode)
 
                 self.canvas.delete(self.move_id)
-                fill = (
-                    "blue"
-                    if self.annotations_dict[str(self.move_id)][1] in ["polygon", "roi"]
-                    or self.canvas_mode == "move"
-                    else ""
-                )
+                fill = "blue"
                 self.canvas.itemconfigure(
                     new_id, tags="MOVE", outline="blue", fill=fill
                 )
@@ -239,17 +256,55 @@ class Annotator(Frame):
                 del self.annotations_dict[str(self.move_id)]
                 self.move_id = new_id
 
+    def rotated_ellipse(self, event):
+        if self.move_id:
+            coords, mode = self.annotations_dict[str(self.move_id)]
+            if mode == "ellipse":
+                (x0, y0), (x1, y1) = coords
+                center_x = x1 - x0
+                center_y = y1 - y0
+
+                rotate_x = event.x
+                rotate_y = event.y
+
+                diff_x = rotate_x - center_x
+                diff_y = rotate_y - center_y
+                theta = math.atan((diff_y / diff_x)) * (180 / math.pi)
+                print(theta)
+
+                x0_n, y0_n, x1_n, y1_n = get_ellipse((x0, y0), (x1, y1))
+                point_list = oval2poly(x0_n, y0_n, x1_n, y1_n, rotation=theta)
+                new_id = self.canvas.create_polygon(
+                    point_list, fill="green", outline="green", width=3, stipple="gray12"
+                )
+
+                self.canvas.delete(self.move_id)
+                fill = "blue"
+                self.canvas.itemconfigure(
+                    new_id, tags="MOVE", outline="blue", fill=fill
+                )
+
+                self.annotations_dict[f"{new_id}"] = (
+                    [(x0, y0), (x1, y1)],
+                    mode,
+                )
+                del self.annotations_dict[str(self.move_id)]
+                self.move_id = new_id
+
     def delete_annotation(self, event):
         """ Deletes all canvas objects with the tag 'DELETE'"""
         for idx in self.canvas.find_withtag("DELETE"):
             self.canvas.delete(idx)
+            del self.annotations_dict[str(idx)]
 
     def draw_polygon(self, event):
         """ Draws polygons"""
         self.delete_polygons()
-
-        center_x, center_y = event.x, event.y
-        self.temp_polygon_points.append((center_x, center_y))
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        norm_x, norm_y = self.get_coords(event)
+        self.temp_polygon_points.append((x, y))
+        self.temp_polygon_points_norm.append((norm_x, norm_y))
 
         dots = self.draw_points(self.temp_polygon_points)
         self.temp_polygon_point_ids.extend(dots)
@@ -282,7 +337,8 @@ class Annotator(Frame):
         elif n_points == 2:
             temp_id = self.canvas.create_line(centers, fill="green", width=3)
 
-        self.temp_polygon_point_ids.append(temp_id)
+        if do_temp:
+            self.temp_polygon_point_ids.append(temp_id)
         return temp_id
 
     def move_polygon(self, event):
@@ -292,12 +348,23 @@ class Annotator(Frame):
 
         dots_array = np.array(self.move_polygon_points)
         center = np.average(dots_array, 0)
-        move = np.array([event.x, event.y]) - center
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        norm_x, norm_y = self.get_coords(event)
+
+        move_scaled = np.array([x, y]) - center * self.imscale
+        scaled_centers = [
+            [x[0] * self.imscale + move_scaled[0], x[1] * self.imscale + move_scaled[1]]
+            for x in self.move_polygon_points
+        ]
+
+        move = np.array([norm_x, norm_y]) - center
         dots_centers = [
             [x[0] + move[0], x[1] + move[1]] for x in self.move_polygon_points
         ]
+
         new_poly_id = self.canvas.create_polygon(
-            dots_centers,
+            scaled_centers,
             fill="blue",
             tags="MOVE",
             outline="blue",
@@ -316,9 +383,13 @@ class Annotator(Frame):
         if len(self.temp_polygon_point_ids):
             self.delete_polygons()
             poly_id = self.draw_polygon_func(self.temp_polygon_points, False)
-            self.annotations_dict[f"{poly_id}"] = (self.temp_polygon_points, "polygon")
+            self.annotations_dict[f"{poly_id}"] = (
+                self.temp_polygon_points_norm,
+                "polygon",
+            )
             self.temp_polygon_point_ids = []
             self.temp_polygon_points = []
+            self.temp_polygon_points_norm = []
 
     def delete_polygons(self):
         """ Deletes all widged ids of temp_polygon"""
@@ -326,21 +397,100 @@ class Annotator(Frame):
             for idx in self.temp_polygon_point_ids:
                 self.canvas.delete(idx)
 
-    def show_image(self, image_id):
+    def show_image(self):
         """ Show image on the Canvas """
-        if image_id:
-            self.canvas.delete(image_id)
-            image_id = None
+        if self.image_id:
+            self.canvas.delete(self.image_id)
+            self.image_id = None
             self.canvas.imagetk = None  # delete previous image from the canvas
         width, height = self.image.size
         new_size = int(self.imscale * width), int(self.imscale * height)
         imagetk = ImageTk.PhotoImage(self.image.resize(new_size))
-        # Use self.text object to set proper coordinates
-        self.image_id = self.canvas.create_image((0, 0), anchor="nw", image=imagetk)
+        self.image_id = self.canvas.create_image(
+            self.canvas.coords(self.text), anchor="nw", image=imagetk
+        )
         self.canvas.lower(self.image_id)  # set it into background
         self.canvas.imagetk = (
             imagetk  # keep an extra reference to prevent garbage-collection
         )
+
+    def load_annotations(self):
+        path = filedialog.askopenfilename()
+        self.Data.load_annotations(path=path)
+
+        for annotation in self.Data:
+            self.load_annotation(annotation)
+
+    def load_annotation(self, data):
+
+        annotation, mode = data
+        x, y = self.canvas.coords(self.text)
+        annotation_scale = [
+            (x + i[0] * self.imscale, y + i[1] * self.imscale) for i in annotation
+        ]
+
+        if mode == "polygon":
+            temp_id = self.draw_polygon_func(annotation_scale, do_temp=False)
+
+            self.annotations_dict[f"{temp_id}"] = (annotation, mode)
+
+        else:
+            coord1, coord2 = annotation_scale
+            temp_id = self.create_annotation_func(coord1, coord2, mode=mode)
+            coord1, coord2 = annotation
+
+            self.annotations_dict[f"{temp_id}"] = ((coord1, coord2), mode)
+
+    def save_annotations(self):
+        save_path = filedialog.asksaveasfilename(defaultextension=".json")
+        annotations_json = []
+        for i in self.annotations_dict:
+            annotation = convert2json(self.annotations_dict[i])
+            annotations_json.append(annotation)
+
+        with open(save_path, "w") as f:
+            json.dump(annotations_json, f)
+
+    def move_from(self, event):
+        """ Remember previous coordinates for scrolling with the mouse """
+        self.canvas.scan_mark(event.x, event.y)
+
+    def move_to(self, event):
+        """ Drag (move) canvas to the new position """
+        self.canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def wheel(self, event):
+        """ Zoom with mouse wheel """
+        scale = 1.0
+
+        if event.delta == -120:
+            scale *= self.delta
+            self.imscale *= self.delta
+        if event.delta == 120:
+            scale /= self.delta
+            self.imscale /= self.delta
+        # Rescale all canvas objects
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        self.canvas.scale("all", x, y, scale, scale)
+        self.show_image()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def get_coords(self, event):
+        """ Get coordinates of the mouse click event on the image """
+        x1 = self.canvas.canvasx(event.x)  # get coordinates of the event on the canvas
+        y1 = self.canvas.canvasy(event.y)
+        xy = self.canvas.coords(
+            self.image_id
+        )  # get coords of image's upper left corner
+        x2 = round(
+            (x1 - xy[0]) / self.imscale
+        )  # get real (x,y) on the image without zoom
+        y2 = round((y1 - xy[1]) / self.imscale)
+        if 0 <= x2 <= self.image.size[0] and 0 <= y2 <= self.image.size[1]:
+            return (x2, y2)
+        else:
+            print("Outside of the image")
 
 
 # Main function
