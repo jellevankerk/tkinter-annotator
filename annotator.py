@@ -17,7 +17,7 @@ class Annotator(Frame):
         self.canvas = Canvas(self.master, height=height, width=width, bg="black")
         self.canvas.pack()
 
-        self.mode = "ellipse"
+        self.mode = "circle"
         self.do_polygon = False
 
         self.annotations_dict = {}
@@ -28,6 +28,7 @@ class Annotator(Frame):
 
         self.motion_id = None
         self.anno_coords = []
+        self.anno_coords_save = []
 
         self.temp_polygon_points = []
         self.temp_polygon_point_ids = []
@@ -126,6 +127,8 @@ class Annotator(Frame):
             x = self.canvas.canvasx(event.x)
             y = self.canvas.canvasy(event.y)
             self.anno_coords.append([x, y])
+            x, y = self.get_coords(event)
+            self.anno_coords_save.append([x, y])
 
             if len(self.anno_coords) >= 2:
                 temp_id = self.create_annotation_func(
@@ -135,8 +138,9 @@ class Annotator(Frame):
                 coords = [
                     (x[0] / self.imscale, x[1] / self.imscale) for x in self.anno_coords
                 ]
-                self.annotations_dict[f"{temp_id}"] = (coords, self.mode)
+                self.annotations_dict[f"{temp_id}"] = (self.anno_coords_save, self.mode)
                 self.anno_coords = []
+                self.anno_coords_save = []
 
                 return temp_id
 
@@ -228,9 +232,11 @@ class Annotator(Frame):
                 ydim = abs(coords[0][1] - coords[1][1])
 
                 # Create new annotations at new location
+
+                x, y = self.get_coords(event)
+                new_coord1, new_coord2 = find_coords((x, y), xdim, ydim)
                 x = self.canvas.canvasx(event.x)
                 y = self.canvas.canvasy(event.y)
-                new_coord1, new_coord2 = find_coords((x, y), xdim, ydim)
                 scaled_coord1, scaled_coord2 = find_coords(
                     (x, y),
                     xdim * self.imscale,
@@ -469,6 +475,22 @@ class Annotator(Frame):
         self.canvas.scale("all", x, y, scale, scale)
         self.show_image()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def get_coords(self, event):
+        """ Get coordinates of the mouse click event on the image """
+        x1 = self.canvas.canvasx(event.x)  # get coordinates of the event on the canvas
+        y1 = self.canvas.canvasy(event.y)
+        xy = self.canvas.coords(
+            self.image_id
+        )  # get coords of image's upper left corner
+        x2 = round(
+            (x1 - xy[0]) / self.imscale
+        )  # get real (x,y) on the image without zoom
+        y2 = round((y1 - xy[1]) / self.imscale)
+        if 0 <= x2 <= self.image.size[0] and 0 <= y2 <= self.image.size[1]:
+            return (x2, y2)
+        else:
+            print("Outside of the image")
 
 
 # Main function

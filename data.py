@@ -6,19 +6,21 @@ from copy import deepcopy  # dont know if this is the correct operation for this
 
 class Annotations:
     def __init__(self):
-        self.annotations = {}
+        self.annotations_json = []
+        self.annotations_tkinter = {}
         self.ids = []
 
     def __len__(self):
-        return len(self.annotations)
+        return len(self.annotations_tkinter)
 
     def __getitem__(self, index):
         idx = self.ids[index]
-        return self.annotations[idx]
+        return self.annotations_tkinter[idx]
 
     def load_annotations(self, path):
         with open(path, "r") as f:
             annotations = json.load(f)
+        self.annotations_json.extend(annotations)
         self.__convert2tkinter_format(annotations)
 
     def __convert2tkinter_format(self, annotations):
@@ -32,15 +34,15 @@ class Annotations:
 
             if annotation["type"] == "ellipse" or annotation["type"] == "circle":
 
-                self.annotations[idx] = self.__ellipse2tkinter(
+                self.annotations_tkinter[idx] = self.__ellipse2tkinter(
                     annotation, annotation["type"]
                 )
 
             elif annotation["type"] == "polygon":
-                self.annotations[idx] = self.__polygon2tkinter(annotation)
+                self.annotations_tkinter[idx] = self.__polygon2tkinter(annotation)
 
             elif annotation["type"] == "rectangle":
-                self.annotations[idx] = self.__rectangle2tkinter(annotation)
+                self.annotations_tkinter[idx] = self.__rectangle2tkinter(annotation)
             else:
                 raise ValueError(f" Mode {annotation['type']} is not supported")
 
@@ -88,6 +90,17 @@ class Annotations:
 
     @staticmethod
     def __polygon2json(data):
+        pass
+
+
+class AnnotationTkinter:
+    def __init__(self, coords, shape, canvas_id, scale_id):
+        self.coords = coords
+        self.shape = shape
+        self.canvas_id = canvas_id
+        self.scale_id = scale_id
+
+    def get_normalized_coords(self):
         pass
 
 
