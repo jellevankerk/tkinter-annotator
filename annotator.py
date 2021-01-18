@@ -352,16 +352,21 @@ class Annotator(Frame):
 
         return points
 
-    def draw_polygon_func(self, centers, do_temp=False):
+    def draw_polygon_func(self, centers, do_temp=False, idx=None):
         """ Function to draw polygon"""
         n_points = len(centers)
         temp_id = 0
         if n_points > 2:
             temp_id = self.canvas.create_polygon(
-                centers, fill="green", outline="green", width=3, stipple="gray12"
+                centers,
+                fill="green",
+                outline="green",
+                width=3,
+                stipple="gray12",
+                tags=idx,
             )
         elif n_points == 2:
-            temp_id = self.canvas.create_line(centers, fill="green", width=3)
+            temp_id = self.canvas.create_line(centers, fill="green", width=3, tags=idx)
 
         if do_temp:
             self.temp_polygon_point_ids.append(temp_id)
@@ -369,8 +374,9 @@ class Annotator(Frame):
 
     def move_polygon(self, event):
         """ Moves polygon annotations"""
+        idx = self.canvas.gettags(self.move_id)[0]
         if not len(self.move_polygon_points):
-            self.move_polygon_points, _ = self.annotations_dict[str(self.move_id)]
+            self.move_polygon_points = self.Data.annotations_tkinter[idx].coords_norm
 
         dots_array = np.array(self.move_polygon_points)
         center = np.average(dots_array, 0)
@@ -392,26 +398,24 @@ class Annotator(Frame):
         new_poly_id = self.canvas.create_polygon(
             scaled_centers,
             fill="blue",
-            tags="MOVE",
+            tags=(idx, "MOVE"),
             outline="blue",
             width=3,
             stipple="gray12",
         )
 
         self.canvas.delete(self.move_id)
-        del self.annotations_dict[str(self.move_id)]
-
-        self.annotations_dict[str(new_poly_id)] = (dots_centers, "polygon")
+        self.Data.annotations_tkinter[idx].edit_annotation(dots_centers, new_poly_id)
         self.move_id = new_poly_id
 
     def save_polygons(self, event):
         """ Saves current polygon, after this a new polygon can be saved"""
         if len(self.temp_polygon_point_ids):
+            idx = str(uuid.uuid4())
             self.delete_polygons()
-            poly_id = self.draw_polygon_func(self.temp_polygon_points, False)
-            self.annotations_dict[f"{poly_id}"] = (
-                self.temp_polygon_points_norm,
-                "polygon",
+            poly_id = self.draw_polygon_func(self.temp_polygon_points, False, idx=idx)
+            self.Data.add_annotation(
+                self.temp_polygon_points_norm, "polygon", poly_id, idx
             )
             self.temp_polygon_point_ids = []
             self.temp_polygon_points = []
@@ -458,7 +462,7 @@ class Annotator(Frame):
         ]
 
         if shape == "polygon":
-            temp_id = self.draw_polygon_func(annotation_scale, do_temp=False)
+            temp_id = self.draw_polygon_func(annotation_scale, do_temp=False, idx=idx)
 
         else:
             coord1, coord2 = annotation_scale
