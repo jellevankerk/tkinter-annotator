@@ -4,24 +4,40 @@ import numpy as np
 from copy import deepcopy  # dont know if this is the correct operation for this
 
 
-class Annotations:
+class AnnotationsTkinter:
     def __init__(self):
-        self.annotations_json = []
         self.annotations_tkinter = {}
-        self.ids = []
 
     def __len__(self):
         return len(self.annotations_tkinter)
 
     def __getitem__(self, index):
-        idx = self.ids[index]
-        return self.annotations_tkinter[idx]
+        idx = list(self.annotations_tkinter.keys())[
+            index
+        ]  # python 3.6+ dicts are ordered
+        return self.annotations_tkinter[idx], idx
 
     def load_annotations(self, path):
         with open(path, "r") as f:
             annotations = json.load(f)
-        self.annotations_json.extend(annotations)
         self.__convert2tkinter_format(annotations)
+
+    def add_annotation(self, coord_norm, shape, canvas_id, idx):
+        if shape == "polygon":
+            self.annotations_tkinter[idx] = AnnotationTkinter(
+                coord_norm, canvas_id=canvas_id
+            )
+        elif shape == "ellipse" or shape == "circle":
+            self.annotations_tkinter[idx] = EllipseTkinter(
+                coord_norm, shape, canvas_id=canvas_id
+            )
+        elif shape == "rectangle":
+            self.annotations_tkinter[idx] = RectangleTkinter(
+                coord_norm, canvas_id=canvas_id
+            )
+
+    def delete_annotation(self, idx):
+        del self.annotations_tkinter[idx]
 
     def __convert2tkinter_format(self, annotations):
         copy_annotations = deepcopy(annotations)
@@ -30,7 +46,6 @@ class Annotations:
                 idx = annotation["id"]
             else:
                 idx = str(uuid.uuid4())
-            self.ids.append(idx)
 
             if annotation["type"] == "ellipse" or annotation["type"] == "circle":
 
@@ -47,7 +62,7 @@ class Annotations:
                 raise ValueError(f" Mode {annotation['type']} is not supported")
 
     @staticmethod
-    def __ellipse2tkinter(data, mode):
+    def __ellipse2tkinter(data, shape):
         radius_x, radius_y = data["radiusX"], data["radiusY"]
 
         center_x, center_y = (
@@ -55,16 +70,47 @@ class Annotations:
             data["center"]["y"],
         )
 
-        return (
-            ((center_x, center_y), (center_x + radius_x, center_y + radius_y)),
-            mode,
+        if "area" in data:
+            area = data["area"]
+        else:
+            area = None
+
+        if "accuracy" in data:
+            accuracy = data["accuracy"]
+        else:
+            accuracy = None
+
+        coords = ((center_x, center_y), (center_x + radius_x, center_y + radius_y))
+        annotation = EllipseTkinter(
+            coords,
+            shape,
+            area=area,
+            accuracy=accuracy,
+            radius_x=radius_x,
+            radius_y=radius_y,
         )
+        return annotation
 
     @staticmethod
     def __polygon2tkinter(data):
         points = [(point["x"], point["y"]) for point in data["points"]]
 
-        return (points, "polygon")
+        if "area" in data:
+            area = data["area"]
+        else:
+            area = None
+
+        if "accuracy" in data:
+            accuracy = data["accuracy"]
+        else:
+            accuracy = None
+
+        annotation = AnnotationTkinter(
+            points,
+            area=area,
+            accuracy=accuracy,
+        )
+        return annotation
 
     @staticmethod
     def __rectangle2tkinter(data):
@@ -72,13 +118,21 @@ class Annotations:
         width = data["width"]
         height = data["height"]
 
-        return (((x_coord, y_coord), (x_coord + width, y_coord + height)), "rectangle")
+        if "area" in data:
+            area = data["area"]
+        else:
+            area = None
 
-    def add_annotation(self, annotation):
-        pass
+        if "accuracy" in data:
+            accuracy = data["accuracy"]
+        else:
+            accuracy = None
+        coord = ((x_coord, y_coord), (x_coord + width, y_coord + height))
+        annotation = RectangleTkinter(
+            coord, area=area, accuracy=accuracy, width=width, height=height
+        )
 
-    def delete_annotation(self, index):
-        pass
+        return annotation
 
     @staticmethod
     def __convert2json_format(annotation):
@@ -94,18 +148,75 @@ class Annotations:
 
 
 class AnnotationTkinter:
-    def __init__(self, coords, shape, canvas_id, scale_id):
-        self.coords = coords
+    def __init__(
+        self,
+        coords_norm,
+        shape="polygon",
+        canvas_id=None,
+        area=None,
+        accuracy=None,
+    ):
+        self.coords_norm = coords_norm
         self.shape = shape
         self.canvas_id = canvas_id
-        self.scale_id = scale_id
+        self.area = area
+        self.accuracy = accuracy
 
-    def get_normalized_coords(self):
-        pass
+    def edit_annotation(self, coord_norm, canvas_id):
+        self.coords_norm = coord_norm
+        self.canvas_id = canvas_id
+
+
+class EllipseTkinter(AnnotationTkinter):
+    def __init__(
+        self,
+        coords_norm,
+        shape,
+        canvas_id=None,
+        area=None,
+        accuracy=None,
+        radius_x=None,
+        radius_y=None,
+        angle=None,
+    ):
+        super().__init__(coords_norm, shape, canvas_id=None, area=None, accuracy=None)
+
+        self.radius_x = radius_x
+        self.radius_y = radius_y
+        self.angle = angle
+
+    def get_mean_radius(self):
+        return (self.radius_y + self.radius_x) / 2
+
+    def get_mean_diameter(self):
+        return (2 * self.radius_y + 2 * self.radius_x) / 2
+
+
+class RectangleTkinter(AnnotationTkinter):
+    def __init__(
+        self,
+        coords_norm,
+        canvas_id=None,
+        area=None,
+        accuracy=None,
+        width=None,
+        height=None,
+    ):
+        super().__init__(
+            coords_norm,
+            shape="rectangle",
+            canvas_id=None,
+            area=None,
+            accuracy=None,
+        )
+
+        self.width = width
+        self.height = height
 
 
 def convert2json(data):
-    annotation, mode = data
+    annotation = data.coords_norm
+    mode = data.shape
 
     if mode == "ellipse" or mode == "circle":
         json_annotation = ellipse2json(annotation, mode)
