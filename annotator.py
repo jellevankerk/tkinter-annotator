@@ -3,6 +3,8 @@ import uuid
 import cv2
 import json
 import numpy as np
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
 from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
@@ -24,6 +26,7 @@ class Annotator(Frame):
         self.Data = AnnotationsTkinter()
 
         self.delete_ids = []
+        self.combine_ids = []
         self.move_id = None
 
         self.motion_id = None
@@ -57,6 +60,9 @@ class Annotator(Frame):
         )
         self.menubar.add_cascade(
             label="Delete", command=lambda: self.set_canvas_mode(mode="delete")
+        )
+        self.menubar.add_cascade(
+            label="Combine", command=lambda: self.set_canvas_mode(mode="combine")
         )
         self.menubar.add_cascade(label="Options", menu=self.shape_options)
         self.master.config(menu=self.menubar)
@@ -106,6 +112,9 @@ class Annotator(Frame):
         elif mode == "delete":
             self.canvas.bind("<ButtonPress-1>", self.select_delete)
             self.canvas.bind("<ButtonPress-3>", self.delete_annotation)
+        elif mode == "combine":
+            self.canvas.bind("<ButtonPress-1>", self.select_combine)
+            self.canvas.bind("<ButtonPress-3>", self.combine_annotation)
 
     def unbind(self):
         self.canvas.unbind("<ButtonPress-1>")
@@ -239,6 +248,30 @@ class Annotator(Frame):
                     self.canvas.addtag_withtag("MOVE", widget_id)
                     self.move_id = widget_id[0]
 
+    def select_combine(self, event=None, idx=None):
+        if event:
+            x = self.canvas.canvasx(event.x)
+            y = self.canvas.canvasy(event.y)
+            widget_id = event.widget.find_closest(x, y, halo=2)
+        if idx:
+            widget_id = idx
+        if len(widget_id) and widget_id[0] != self.image_id:
+            if widget_id[0] in self.combine_ids:
+                fill = "green"
+                self.canvas.itemconfigure(widget_id, outline="green", fill=fill)
+                self.canvas.dtag(widget_id, "COMBINE")
+                self.combine_ids.pop(self.combine_ids.index(widget_id[0]))
+
+            elif widget_id[0] != self.move_id:
+                fill = "yellow"
+                self.canvas.itemconfigure(
+                    widget_id,
+                    outline="yellow",
+                    fill=fill,
+                )
+                self.canvas.addtag_withtag("COMBINE", widget_id)
+                self.combine_ids.append(widget_id[0])
+
     def move_annotation(self, event):
         """ Moves annotations with tag 'MOVE' by presing the wheelmouse button and moving the mouse"""
         if self.move_id:
@@ -322,6 +355,54 @@ class Annotator(Frame):
             idx_tag = self.canvas.gettags(idx)[0]
             self.canvas.delete(idx)
             self.Data.delete_annotation(idx_tag)
+
+    def combine_annotation(self, event):
+        polygon_list = []
+        index_tags = []
+        index_canvas = []
+        for idx in self.canvas.find_withtag("COMBINE"):
+            idx_tag = self.canvas.gettags(idx)[0]
+            index_canvas.append(idx)
+            index_tags.append(idx_tag)
+
+            data = self.Data.annotations_tkinter[idx_tag]
+            coords_norm = data.coords_norm
+            shape = data.shape
+            if shape == "ellipse":
+                coord1, coord2 = coords_norm
+                x0, y0, x1, y1 = get_ellipse(coord1, coord2)
+                point_list = oval2poly(x0, y0, x1, y1)
+                point_list = [
+                    (x, y) for x, y in zip(point_list[0::2], point_list[1::2])
+                ]
+                polygon = Polygon(point_list)
+            elif shape == "circle":
+                coord1, coord2 = coords_norm
+                x0, y0, x1, y1 = get_circle(coord1, coord2)
+                point_list = oval2poly(x0, y0, x1, y1)
+                point_list = [
+                    (x, y) for x, y in zip(point_list[0::2], point_list[1::2])
+                ]
+                polygon = Polygon(point_list)
+            else:
+                polygon = Polygon(coords_norm)
+            polygon_list.append(polygon)
+
+        union_polygon = unary_union(polygon_list)
+        if hasattr(union_polygon, "exterior"):
+            union_polygon = [tuple(x) for x in np.array(union_polygon.exterior)]
+            union_polygon_scale = [
+                (x[0] * self.imscale, x[1] * self.imscale) for x in union_polygon
+            ]
+            idx = str(uuid.uuid4())
+            poly_id = self.draw_polygon_func(union_polygon_scale, False, idx=idx)
+            self.Data.add_annotation(union_polygon, "polygon", poly_id, idx)
+            for idx, idx_tag in zip(index_canvas, index_tags):
+                self.canvas.delete(idx)
+                self.Data.delete_annotation(idx_tag)
+        else:
+            for idx in index_canvas:
+                self.select_combine(event=None, idx=[idx])
 
     def draw_polygon(self, event):
         """ Draws polygons"""
