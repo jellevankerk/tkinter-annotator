@@ -19,7 +19,7 @@ class Annotator(Frame):
         self.canvas = Canvas(self.master, height=height, width=width, bg="black")
         self.canvas.pack()
 
-        self.mode = "circle"
+        self.shape = "circle"
         self.do_polygon = False
 
         self.annotations_dict = {}
@@ -30,8 +30,8 @@ class Annotator(Frame):
         self.move_id = None
 
         self.motion_id = None
-        self.anno_coords = []
-        self.anno_coords_norm = []
+        self.temp_coords = []
+        self.temp_coords_norm = []
 
         self.temp_polygon_points = []
         self.temp_polygon_points_norm = []
@@ -70,19 +70,19 @@ class Annotator(Frame):
         # Shape options
         self.shape_options.add_command(
             label="Circle",
-            command=lambda: self.set_shape(mode="circle"),
+            command=lambda: self.set_shape(shape="circle"),
         )
         self.shape_options.add_command(
             label="Ellipse",
-            command=lambda: self.set_shape(mode="ellipse"),
+            command=lambda: self.set_shape(shape="ellipse"),
         )
         self.shape_options.add_command(
             label="Rectangle",
-            command=lambda: self.set_shape(mode="rectangle"),
+            command=lambda: self.set_shape(shape="rectangle"),
         )
         self.shape_options.add_command(
             label="Polygon",
-            command=lambda: self.set_shape(mode="polygon"),
+            command=lambda: self.set_shape(shape="polygon"),
         )
         self.menubar.add_cascade(
             label="Load annotations", command=self.load_annotations
@@ -107,7 +107,6 @@ class Annotator(Frame):
             self.canvas.bind("<ButtonPress-3>", self.save_polygons)
         elif mode == "move":
             self.canvas.bind("<ButtonPress-1>", self.select_move)
-            # self.canvas.bind("<B2-Motion>", self.rotated_ellipse)
             self.canvas.bind("<Motion>", self.move_annotation)
         elif mode == "delete":
             self.canvas.bind("<ButtonPress-1>", self.select_delete)
@@ -117,72 +116,84 @@ class Annotator(Frame):
             self.canvas.bind("<ButtonPress-3>", self.combine_annotation)
 
     def unbind(self):
+        """ Unbind keys"""
         self.canvas.unbind("<ButtonPress-1>")
-        # self.canvas.unbind("<B2-Motion>")
         self.canvas.unbind("<Motion>")
         self.canvas.unbind("<ButtonPress 3>")
 
-    def set_shape(self, mode):
-        """" Set shape of the annotations (circle, ellipse, rectangle or polygon)"""
+    def set_shape(self, shape):
+        """ Set shape of the annotations (circle, ellipse, rectangle or polygon)"""
         if len(self.temp_polygon_point_ids):
             self.save_polygons(None)
-        self.mode = mode
+        self.shape = shape
 
     def create_annotation(self, event):
         """ Creates annotations using the coordinates of left mouse clicks"""
-        idx = str(uuid.uuid4())
-        if self.mode == "polygon":
+        unique_id = str(uuid.uuid4())
+        if self.shape == "polygon":
             self.draw_polygon(event)
         else:
-            x = self.canvas.canvasx(event.x)
-            y = self.canvas.canvasy(event.y)
-            self.anno_coords.append([x, y])
+            # Get normalized coordinates
+            x_norm, y_norm = self.get_coords(event)
+            self.temp_coords_norm.append([x_norm, y_norm])
 
-            x, y = self.get_coords(event)
-            self.anno_coords_norm.append([x, y])
+            # Get scaled coordinates
+            x_canvas = self.canvas.canvasx(event.x)
+            y_canvas = self.canvas.canvasy(event.y)
+            self.temp_coords.append([x_canvas, y_canvas])
 
-            if len(self.anno_coords) >= 2:
-                temp_id = self.create_annotation_func(
-                    self.anno_coords[0], self.anno_coords[1], idx
+            if len(self.temp_coords) >= 2:
+                # Draw annotation on canvas
+                canvas_id = self.create_annotation_func(
+                    unique_id,
+                    self.temp_coords[0],
+                    self.temp_coords[1],
                 )
 
-                self.Data.add_annotation(self.anno_coords_norm, self.mode, temp_id, idx)
-                self.anno_coords = []
-                self.anno_coords_norm = []
+                # Save annotation information
+                self.Data.add_annotation(
+                    unique_id,
+                    canvas_id,
+                    self.temp_coords_norm,
+                    self.shape,
+                )
 
-                return temp_id
+                # Reset annotations creation
+                self.temp_coords = []
+                self.temp_coords_norm = []
 
-    def create_annotation_func(self, coord1, coord2, idx, mode=None):
-        """ Depending on the mode of the functions draws a circle, ellipse, rectangle or polygon """
-        if not mode:
-            mode = self.mode
-        if mode == "ellipse":
+                return canvas_id
+
+    def create_annotation_func(self, unique_id, coord1, coord2, shape=None):
+        """ Depending on the shape of the functions draws a circle, ellipse, rectangle or polygon """
+        if not shape:
+            shape = self.shape
+
+        if shape == "ellipse":
             x0, y0, x1, y1 = get_ellipse(coord1, coord2)
-
             point_list = oval2poly(x0, y0, x1, y1)
-            temp_id = self.canvas.create_polygon(
+            canvas_id = self.canvas.create_polygon(
                 point_list,
                 fill="green",
                 outline="green",
                 width=3,
                 stipple="gray12",
-                tags=idx,
+                tags=unique_id,
             )
-        elif mode == "circle":
+        elif shape == "circle":
             x0, y0, x1, y1 = get_circle(coord1, coord2)
-
             point_list = oval2poly(x0, y0, x1, y1)
-            temp_id = self.canvas.create_polygon(
+            canvas_id = self.canvas.create_polygon(
                 point_list,
                 fill="green",
                 outline="green",
                 width=3,
                 stipple="gray12",
-                tags=idx,
+                tags=unique_id,
             )
-        elif mode == "rectangle":
+        elif shape == "rectangle":
             x0, y0, x1, y1 = get_rectangle(coord1, coord2)
-            temp_id = self.canvas.create_rectangle(
+            canvas_id = self.canvas.create_rectangle(
                 x0,
                 y0,
                 x1,
@@ -191,172 +202,153 @@ class Annotator(Frame):
                 outline="green",
                 width=3,
                 stipple="gray12",
-                tags=idx,
+                tags=unique_id,
             )
-        return temp_id
+
+        return canvas_id
 
     def motion_create_annotation(self, event):
         """ Track mouse position over the canvas """
-        x = self.canvas.canvasx(event.x)
-        y = self.canvas.canvasy(event.y)
+        x_canvas = self.canvas.canvasx(event.x)
+        y_canvas = self.canvas.canvasy(event.y)
 
         if self.motion_id:
             self.canvas.delete(self.motion_id)
-        if len(self.anno_coords) == 1 and not self.do_polygon:
+        if len(self.temp_coords) == 1 and not self.do_polygon:
             self.motion_id = self.create_annotation_func(
-                self.anno_coords[0], (x, y), "motion"
+                "CREATE",
+                self.temp_coords[0],
+                (x_canvas, y_canvas),
             )
 
     def select_delete(self, event):
         """ Selects/deselects the closest annotation and adds/removes 'DELETE' tag"""
-        x = self.canvas.canvasx(event.x)
-        y = self.canvas.canvasy(event.y)
-        widget_id = event.widget.find_closest(x, y, halo=2)
-        if len(widget_id) and widget_id[0] != self.image_id:
-            if widget_id[0] in self.delete_ids:
-                fill = "green"
-                self.canvas.itemconfigure(widget_id, outline="green", fill=fill)
-                self.canvas.dtag(widget_id, "DELETE")
-                self.delete_ids.pop(self.delete_ids.index(widget_id[0]))
+        x_canvas = self.canvas.canvasx(event.x)
+        y_canvas = self.canvas.canvasy(event.y)
+        delete_canvas_id = event.widget.find_closest(x_canvas, y_canvas, halo=2)[0]
 
-            elif widget_id[0] != self.move_id:
-                fill = "red"
+        if delete_canvas_id != self.image_id:
+            if delete_canvas_id in self.delete_ids:
                 self.canvas.itemconfigure(
-                    widget_id,
-                    outline="red",
-                    fill=fill,
+                    delete_canvas_id, outline="green", fill="green"
                 )
-                self.canvas.addtag_withtag("DELETE", widget_id)
-                self.delete_ids.append(widget_id[0])
+                self.canvas.dtag(delete_canvas_id, "DELETE")
+                self.delete_ids.pop(self.delete_ids.index(delete_canvas_id))
+
+            elif (
+                delete_canvas_id != self.move_id
+                and delete_canvas_id not in self.combine_ids
+            ):
+                self.canvas.itemconfigure(
+                    delete_canvas_id,
+                    outline="red",
+                    fill="red",
+                )
+                self.canvas.addtag_withtag("DELETE", delete_canvas_id)
+                self.delete_ids.append(delete_canvas_id)
 
     def select_move(self, event):
         """ Selects/deselects the closest annotation and adds/removes 'MOVE' tag"""
-        widget_id = self.canvas.find_withtag("current")
+        move_canvas_id = self.canvas.find_withtag("current")[0]
 
-        if len(widget_id) and widget_id[0] != self.image_id:
-            if widget_id[0] == self.move_id:
-                fill = "green"
-                self.canvas.itemconfigure(widget_id, outline="green", fill=fill)
-                self.canvas.dtag(widget_id, "MOVE")
+        if move_canvas_id != self.image_id:
+            if move_canvas_id == self.move_id:
+                self.canvas.itemconfigure(move_canvas_id, outline="green", fill="green")
+                self.canvas.dtag(move_canvas_id, "MOVE")
                 self.move_id = None
                 self.move_polygon_points = []
 
-            elif widget_id[0] not in self.delete_ids:
+            elif (
+                move_canvas_id not in self.delete_ids
+                and move_canvas_id not in self.combine_ids
+            ):
                 if not self.move_id:
-                    fill = "blue"
-                    self.canvas.itemconfigure(widget_id, outline="blue", fill=fill)
-                    self.canvas.addtag_withtag("MOVE", widget_id)
-                    self.move_id = widget_id[0]
+                    self.canvas.itemconfigure(
+                        move_canvas_id, outline="blue", fill="blue"
+                    )
+                    self.canvas.addtag_withtag("MOVE", move_canvas_id)
+                    self.move_id = move_canvas_id
 
-    def select_combine(self, event=None, idx=None):
+    def select_combine(self, event=None, canvas_id=None):
+        """ Selects/deselects the closest annotation and adds/removes 'COMBINE' tag"""
         if event:
             x = self.canvas.canvasx(event.x)
             y = self.canvas.canvasy(event.y)
-            widget_id = event.widget.find_closest(x, y, halo=2)
-        if idx:
-            widget_id = idx
-        if len(widget_id) and widget_id[0] != self.image_id:
-            if widget_id[0] in self.combine_ids:
-                fill = "green"
-                self.canvas.itemconfigure(widget_id, outline="green", fill=fill)
-                self.canvas.dtag(widget_id, "COMBINE")
-                self.combine_ids.pop(self.combine_ids.index(widget_id[0]))
+            combine_canvas_id = event.widget.find_closest(x, y, halo=2)[0]
+        if canvas_id:
+            combine_canvas_id = canvas_id
 
-            elif widget_id[0] != self.move_id:
-                fill = "yellow"
+        if combine_canvas_id != self.image_id:
+            if combine_canvas_id in self.combine_ids:
+                fill = "green"
+                self.canvas.itemconfigure(combine_canvas_id, outline="green", fill=fill)
+                self.canvas.dtag(combine_canvas_id, "COMBINE")
+                self.combine_ids.pop(self.combine_ids.index(combine_canvas_id))
+
+            elif (
+                combine_canvas_id != self.move_id
+                and combine_canvas_id not in self.delete_ids
+            ):
                 self.canvas.itemconfigure(
-                    widget_id,
+                    combine_canvas_id,
                     outline="yellow",
-                    fill=fill,
+                    fill="yellow",
                 )
-                self.canvas.addtag_withtag("COMBINE", widget_id)
-                self.combine_ids.append(widget_id[0])
+                self.canvas.addtag_withtag("COMBINE", combine_canvas_id)
+                self.combine_ids.append(combine_canvas_id)
 
     def move_annotation(self, event):
         """ Moves annotations with tag 'MOVE' by presing the wheelmouse button and moving the mouse"""
         if self.move_id:
-            idx = self.canvas.gettags(self.move_id)[0]
-            data = self.Data.annotations_tkinter[idx]
-            coords = data.coords_norm
-            mode = data.shape
+            unique_id = self.canvas.gettags(self.move_id)[0]
+            coords, shape = self.Data.get_coords_from_unique_id(unique_id)
 
-            if mode == "polygon":
+            if shape == "polygon":
                 self.move_polygon(event)
             else:
                 # Image dimensions
-                xdim = abs(coords[0][0] - coords[1][0])
-                ydim = abs(coords[0][1] - coords[1][1])
+                x_dim = abs(coords[0][0] - coords[1][0])
+                y_dim = abs(coords[0][1] - coords[1][1])
 
                 # Create new annotations at new location
+                x_norm, y_norm = self.get_coords(event)
+                coord1_norm, coord2_norm = find_coords((x_norm, y_norm), x_dim, y_dim)
 
-                x, y = self.get_coords(event)
-                new_coord1, new_coord2 = find_coords((x, y), xdim, ydim)
-                x = self.canvas.canvasx(event.x)
-                y = self.canvas.canvasy(event.y)
-                scaled_coord1, scaled_coord2 = find_coords(
-                    (x, y),
-                    xdim * self.imscale,
-                    ydim * self.imscale,
+                x_canvas = self.canvas.canvasx(event.x)
+                y_canvas = self.canvas.canvasy(event.y)
+                coord1_scaled, coord2_scaled = find_coords(
+                    (x_canvas, y_canvas),
+                    x_dim * self.imscale,
+                    y_dim * self.imscale,
                 )
 
-                new_id = self.create_annotation_func(
-                    scaled_coord1, scaled_coord2, idx, mode
-                )
-
-                self.canvas.delete(self.move_id)
-                fill = "blue"
-                self.canvas.itemconfigure(
-                    new_id, tags=(idx, "MOVE"), outline="blue", fill=fill
-                )
-                self.Data.annotations_tkinter[idx].edit_annotation(
-                    [new_coord1, new_coord2], new_id
-                )
-
-                self.move_id = new_id
-
-    def rotated_ellipse(self, event):
-        if self.move_id:
-            coords, mode = self.annotations_dict[str(self.move_id)]
-            if mode == "ellipse":
-                (x0, y0), (x1, y1) = coords
-                center_x = x1 - x0
-                center_y = y1 - y0
-
-                rotate_x = event.x
-                rotate_y = event.y
-
-                diff_x = rotate_x - center_x
-                diff_y = rotate_y - center_y
-                theta = math.atan((diff_y / diff_x)) * (180 / math.pi)
-                print(theta)
-
-                x0_n, y0_n, x1_n, y1_n = get_ellipse((x0, y0), (x1, y1))
-                point_list = oval2poly(x0_n, y0_n, x1_n, y1_n, rotation=theta)
-                new_id = self.canvas.create_polygon(
-                    point_list, fill="green", outline="green", width=3, stipple="gray12"
+                canvas_id = self.create_annotation_func(
+                    unique_id, coord1_scaled, coord2_scaled, shape
                 )
 
                 self.canvas.delete(self.move_id)
-                fill = "blue"
                 self.canvas.itemconfigure(
-                    new_id, tags="MOVE", outline="blue", fill=fill
+                    canvas_id, tags=(unique_id, "MOVE"), outline="blue", fill="blue"
+                )
+                self.Data.edit_annotation(
+                    unique_id,
+                    canvas_id,
+                    [coord1_norm, coord2_norm],
                 )
 
-                self.annotations_dict[f"{new_id}"] = (
-                    [(x0, y0), (x1, y1)],
-                    mode,
-                )
-                del self.annotations_dict[str(self.move_id)]
-                self.move_id = new_id
+                self.move_id = canvas_id
 
     def delete_annotation(self, event):
         """ Deletes all canvas objects with the tag 'DELETE'"""
-        for idx in self.canvas.find_withtag("DELETE"):
-            idx_tag = self.canvas.gettags(idx)[0]
-            self.canvas.delete(idx)
-            self.Data.delete_annotation(idx_tag)
+        for canvas_id in self.canvas.find_withtag("DELETE"):
+            unique_id = self.canvas.gettags(canvas_id)[0]
+            self.canvas.delete(canvas_id)
+            self.Data.delete_annotation(unique_id)
 
     def combine_annotation(self, event):
+        """ Combines annotations together"""
+        # TODO annotations when created start on the wrong place
+        # TODO something goes wrong when combining combined annotations
         polygon_list = []
         index_tags = []
         index_canvas = []
@@ -402,7 +394,7 @@ class Annotator(Frame):
                 self.Data.delete_annotation(idx_tag)
         else:
             for idx in index_canvas:
-                self.select_combine(event=None, idx=[idx])
+                self.select_combine(event=None, canvas_id=[idx])
 
     def draw_polygon(self, event):
         """ Draws polygons"""
@@ -547,7 +539,7 @@ class Annotator(Frame):
 
         else:
             coord1, coord2 = annotation_scale
-            temp_id = self.create_annotation_func(coord1, coord2, idx, mode=shape)
+            temp_id = self.create_annotation_func(idx, coord1, coord2, shape=shape)
 
         data.coords = annotation
         data.canvas_id = temp_id

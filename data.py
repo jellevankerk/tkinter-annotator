@@ -22,22 +22,42 @@ class AnnotationsTkinter:
             annotations = json.load(f)
         self.__convert2tkinter_format(annotations)
 
-    def add_annotation(self, coord_norm, shape, canvas_id, idx):
+    def add_annotation(
+        self,
+        unique_id,
+        canvas_id,
+        coord_norm,
+        shape,
+    ):
         if shape == "polygon":
-            self.annotations_tkinter[idx] = AnnotationTkinter(
+            self.annotations_tkinter[unique_id] = AnnotationTkinter(
                 coord_norm, canvas_id=canvas_id
             )
         elif shape == "ellipse" or shape == "circle":
-            self.annotations_tkinter[idx] = EllipseTkinter(
+            self.annotations_tkinter[unique_id] = EllipseTkinter(
                 coord_norm, shape, canvas_id=canvas_id
             )
         elif shape == "rectangle":
-            self.annotations_tkinter[idx] = RectangleTkinter(
+            self.annotations_tkinter[unique_id] = RectangleTkinter(
                 coord_norm, canvas_id=canvas_id
             )
 
-    def delete_annotation(self, idx):
-        del self.annotations_tkinter[idx]
+    def edit_annotation(
+        self,
+        unique_id,
+        canvas_id,
+        coord_norm,
+    ):
+        self.annotations_tkinter[unique_id].edit_annotation(coord_norm, canvas_id)
+
+    def delete_annotation(self, unique_id):
+        del self.annotations_tkinter[unique_id]
+
+    def get_coords_from_unique_id(self, unique_id):
+        return (
+            self.annotations_tkinter[unique_id].coords_norm,
+            self.annotations_tkinter[unique_id].shape,
+        )
 
     def __convert2tkinter_format(self, annotations):
         copy_annotations = deepcopy(annotations)
