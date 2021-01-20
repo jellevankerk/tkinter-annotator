@@ -20,7 +20,13 @@ class AnnotationsTkinter:
     def load_annotations(self, path):
         with open(path, "r") as f:
             annotations = json.load(f)
-        self.__convert2tkinter_format(annotations)
+        return self.__convert2tkinter_format(annotations)
+
+    def save_annotations(self, path):
+        annotations_json = self.__convert2json_format()
+
+        with open(path, "w") as f:
+            json.dump(annotations_json, f)
 
     def add_annotation(
         self,
@@ -60,6 +66,7 @@ class AnnotationsTkinter:
         )
 
     def __convert2tkinter_format(self, annotations):
+        tkinter_annotations = []
         copy_annotations = deepcopy(annotations)
         for annotation in copy_annotations:
             if "id" in annotation:
@@ -80,6 +87,8 @@ class AnnotationsTkinter:
                 self.annotations_tkinter[idx] = self.__rectangle2tkinter(annotation)
             else:
                 raise ValueError(f" Mode {annotation['type']} is not supported")
+            tkinter_annotations.append((self.annotations_tkinter[idx], idx))
+        return tkinter_annotations
 
     @staticmethod
     def __ellipse2tkinter(data, shape):
@@ -154,17 +163,72 @@ class AnnotationsTkinter:
 
         return annotation
 
-    @staticmethod
-    def __convert2json_format(annotation):
-        pass
+    def __convert2json_format(self):
+        annotations_json = []
+        for unique_id in list(self.annotations_tkinter.keys()):
+            annotation, shape = self.get_coords_from_unique_id(unique_id)
+
+            if shape == "ellipse" or shape == "circle":
+                json_annotation = self.__ellipse2json(annotation, shape)
+            elif shape == "polygon":
+                json_annotation = self.__polygon2json(annotation)
+            elif shape == "rectangle":
+                json_annotation = self.__rectangle2json(annotation)
+            else:
+                raise ValueError(f"shape {shape} is not supported")
+
+            annotations_json.append(json_annotation)
+
+        return annotations_json
 
     @staticmethod
-    def __ellipse2json(data):
-        pass
+    def __ellipse2json(data, shape):
+        json_annotation = {}
+        json_annotation["type"] = shape
+        json_annotation["angleOfRotation"] = 0
+
+        coord1, coord2 = data
+        x0, y0 = coord1
+        x1, y1 = coord2
+
+        radius_x = int(np.floor(np.abs((x1 - x0))))
+        radius_y = int(np.floor(np.abs((y1 - y0))))
+        json_annotation["radiusX"] = radius_x
+        json_annotation["radiusY"] = radius_y
+
+        json_annotation["center"] = {}
+        json_annotation["center"]["x"] = x0
+        json_annotation["center"]["y"] = y0
+
+        return json_annotation
 
     @staticmethod
     def __polygon2json(data):
-        pass
+        json_annotation = {}
+        json_annotation["type"] = "polygon"
+
+        points = []
+        for point in data:
+            json_point = {}
+            json_point["x"] = point[0]
+            json_point["y"] = point[1]
+            points.append(json_point)
+
+        json_annotation["points"] = points
+
+        return json_annotation
+
+    @staticmethod
+    def __rectangle2json(data):
+        json_annotation = {}
+        json_annotation["type"] = "rectangle"
+
+        coord1, coord2 = data
+
+        json_annotation["coords"] = coord1
+        json_annotation["width"] = coord2[0] - coord1[0]
+        json_annotation["height"] = coord2[1] - coord1[1]
+        return json_annotation
 
 
 class AnnotationTkinter:
@@ -232,68 +296,3 @@ class RectangleTkinter(AnnotationTkinter):
 
         self.width = width
         self.height = height
-
-
-def convert2json(data):
-    annotation = data.coords_norm
-    mode = data.shape
-
-    if mode == "ellipse" or mode == "circle":
-        json_annotation = ellipse2json(annotation, mode)
-    elif mode == "polygon":
-        json_annotation = polygon2json(annotation)
-    elif mode == "rectangle":
-        json_annotation = rectangle2json(annotation)
-    else:
-        raise ValueError(f"Mode {mode} is not supported")
-
-    return json_annotation
-
-
-def ellipse2json(annotation, annotation_type):
-    json_annotation = {}
-    json_annotation["type"] = annotation_type
-    json_annotation["angleOfRotation"] = 0
-
-    coord1, coord2 = annotation
-    x0, y0 = coord1
-    x1, y1 = coord2
-
-    radius_x = int(np.floor(np.abs((x1 - x0))))
-    radius_y = int(np.floor(np.abs((y1 - y0))))
-    json_annotation["radiusX"] = radius_x
-    json_annotation["radiusY"] = radius_y
-
-    json_annotation["center"] = {}
-    json_annotation["center"]["x"] = x0
-    json_annotation["center"]["y"] = y0
-
-    return json_annotation
-
-
-def polygon2json(annotation):
-    json_annotation = {}
-    json_annotation["type"] = "polygon"
-
-    points = []
-    for point in annotation:
-        json_point = {}
-        json_point["x"] = point[0]
-        json_point["y"] = point[1]
-        points.append(json_point)
-
-    json_annotation["points"] = points
-
-    return json_annotation
-
-
-def rectangle2json(annotation):
-    json_annotation = {}
-    json_annotation["type"] = "rectangle"
-
-    coord1, coord2 = annotation
-
-    json_annotation["coords"] = coord1
-    json_annotation["width"] = coord2[0] - coord1[0]
-    json_annotation["height"] = coord2[1] - coord1[1]
-    return json_annotation

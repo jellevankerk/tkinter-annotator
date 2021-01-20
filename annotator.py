@@ -10,7 +10,7 @@ from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
 from utilities import find_coords
 from get_shapes import get_circle, get_ellipse, get_rectangle, oval2poly
-from data import AnnotationsTkinter, convert2json
+from data_tkinter_classes import AnnotationsTkinter
 
 
 class Annotator(Frame):
@@ -347,19 +347,16 @@ class Annotator(Frame):
 
     def combine_annotation(self, event):
         """ Combines annotations together"""
-        # TODO annotations when created start on the wrong place
-        # TODO something goes wrong when combining combined annotations
         polygon_list = []
         index_tags = []
         index_canvas = []
-        for idx in self.canvas.find_withtag("COMBINE"):
-            idx_tag = self.canvas.gettags(idx)[0]
-            index_canvas.append(idx)
-            index_tags.append(idx_tag)
 
-            data = self.Data.annotations_tkinter[idx_tag]
-            coords_norm = data.coords_norm
-            shape = data.shape
+        for canvas_id in self.canvas.find_withtag("COMBINE"):
+            unique_id = self.canvas.gettags(canvas_id)[0]
+            index_canvas.append(canvas_id)
+            index_tags.append(unique_id)
+
+            coords_norm, shape = self.Data.get_coords_from_unique_id(unique_id)
             if shape == "ellipse":
                 coord1, coord2 = coords_norm
                 x0, y0, x1, y1 = get_ellipse(coord1, coord2)
@@ -383,30 +380,36 @@ class Annotator(Frame):
         union_polygon = unary_union(polygon_list)
         if hasattr(union_polygon, "exterior"):
             union_polygon = [tuple(x) for x in np.array(union_polygon.exterior)]
+            x_text, y_text = self.canvas.coords(self.text)
             union_polygon_scale = [
-                (x[0] * self.imscale, x[1] * self.imscale) for x in union_polygon
+                (x_text + x[0] * self.imscale, y_text + x[1] * self.imscale)
+                for x in union_polygon
             ]
-            idx = str(uuid.uuid4())
-            poly_id = self.draw_polygon_func(union_polygon_scale, False, idx=idx)
-            self.Data.add_annotation(union_polygon, "polygon", poly_id, idx)
-            for idx, idx_tag in zip(index_canvas, index_tags):
-                self.canvas.delete(idx)
-                self.Data.delete_annotation(idx_tag)
+            unique_id = str(uuid.uuid4())
+            canvas_id = self.draw_polygon_func(
+                union_polygon_scale, False, unique_id=unique_id
+            )
+            self.Data.add_annotation(unique_id, canvas_id, union_polygon, "polygon")
+            for canvas_id, unique_id in zip(index_canvas, index_tags):
+                self.canvas.delete(canvas_id)
+                self.Data.delete_annotation(unique_id)
         else:
-            for idx in index_canvas:
-                self.select_combine(event=None, canvas_id=[idx])
+            for canvas_id in index_canvas:
+                self.select_combine(event=None, canvas_id=canvas_id)
 
     def draw_polygon(self, event):
         """ Draws polygons"""
         self.delete_polygons()
-        x = self.canvas.canvasx(event.x)
-        y = self.canvas.canvasy(event.y)
+
         norm_x, norm_y = self.get_coords(event)
-        self.temp_polygon_points.append((x, y))
         self.temp_polygon_points_norm.append((norm_x, norm_y))
 
-        dots = self.draw_points(self.temp_polygon_points)
-        self.temp_polygon_point_ids.extend(dots)
+        x_canvas = self.canvas.canvasx(event.x)
+        y_canvas = self.canvas.canvasy(event.y)
+        self.temp_polygon_points.append((x_canvas, y_canvas))
+
+        points = self.draw_points(self.temp_polygon_points)
+        self.temp_polygon_point_ids.extend(points)
 
         self.draw_polygon_func(self.temp_polygon_points, True)
 
@@ -425,70 +428,80 @@ class Annotator(Frame):
 
         return points
 
-    def draw_polygon_func(self, centers, do_temp=False, idx=None):
+    def draw_polygon_func(self, centers, do_temp=False, unique_id=None):
         """ Function to draw polygon"""
         n_points = len(centers)
-        temp_id = 0
+        canvas_id = 0
         if n_points > 2:
-            temp_id = self.canvas.create_polygon(
+            canvas_id = self.canvas.create_polygon(
                 centers,
                 fill="green",
                 outline="green",
                 width=3,
                 stipple="gray12",
-                tags=idx,
+                tags=unique_id,
             )
         elif n_points == 2:
-            temp_id = self.canvas.create_line(centers, fill="green", width=3, tags=idx)
+            canvas_id = self.canvas.create_line(
+                centers, fill="green", width=3, tags=unique_id
+            )
 
         if do_temp:
-            self.temp_polygon_point_ids.append(temp_id)
-        return temp_id
+            self.temp_polygon_point_ids.append(canvas_id)
+        return canvas_id
 
     def move_polygon(self, event):
         """ Moves polygon annotations"""
-        idx = self.canvas.gettags(self.move_id)[0]
+        unique_id = self.canvas.gettags(self.move_id)[0]
         if not len(self.move_polygon_points):
-            self.move_polygon_points = self.Data.annotations_tkinter[idx].coords_norm
+            self.move_polygon_points = self.Data.annotations_tkinter[
+                unique_id
+            ].coords_norm
 
-        dots_array = np.array(self.move_polygon_points)
-        center = np.average(dots_array, 0)
-        x = self.canvas.canvasx(event.x)
-        y = self.canvas.canvasy(event.y)
+        points_array = np.array(self.move_polygon_points)
+        center = np.average(points_array, 0)
+
         norm_x, norm_y = self.get_coords(event)
+        move = np.array([norm_x, norm_y]) - center
+        point_centers = [
+            [x[0] + move[0], x[1] + move[1]] for x in self.move_polygon_points
+        ]
 
-        move_scaled = np.array([x, y]) - center * self.imscale
+        x_canvas = self.canvas.canvasx(event.x)
+        y_canvas = self.canvas.canvasy(event.y)
+
+        move_scaled = np.array([x_canvas, y_canvas]) - center * self.imscale
         scaled_centers = [
             [x[0] * self.imscale + move_scaled[0], x[1] * self.imscale + move_scaled[1]]
             for x in self.move_polygon_points
         ]
 
-        move = np.array([norm_x, norm_y]) - center
-        dots_centers = [
-            [x[0] + move[0], x[1] + move[1]] for x in self.move_polygon_points
-        ]
-
-        new_poly_id = self.canvas.create_polygon(
+        canvas_id = self.canvas.create_polygon(
             scaled_centers,
             fill="blue",
-            tags=(idx, "MOVE"),
+            tags=(unique_id, "MOVE"),
             outline="blue",
             width=3,
             stipple="gray12",
         )
 
         self.canvas.delete(self.move_id)
-        self.Data.annotations_tkinter[idx].edit_annotation(dots_centers, new_poly_id)
-        self.move_id = new_poly_id
+        self.Data.edit_annotation(unique_id, canvas_id, point_centers)
+        self.move_id = canvas_id
 
     def save_polygons(self, event):
         """ Saves current polygon, after this a new polygon can be saved"""
         if len(self.temp_polygon_point_ids):
-            idx = str(uuid.uuid4())
+            unique_id = str(uuid.uuid4())
             self.delete_polygons()
-            poly_id = self.draw_polygon_func(self.temp_polygon_points, False, idx=idx)
+            canvas_id = self.draw_polygon_func(
+                self.temp_polygon_points, False, unique_id=unique_id
+            )
             self.Data.add_annotation(
-                self.temp_polygon_points_norm, "polygon", poly_id, idx
+                unique_id,
+                canvas_id,
+                self.temp_polygon_points_norm,
+                "polygon",
             )
             self.temp_polygon_point_ids = []
             self.temp_polygon_points = []
@@ -497,62 +510,58 @@ class Annotator(Frame):
     def delete_polygons(self):
         """ Deletes all widged ids of temp_polygon"""
         if len(self.temp_polygon_point_ids):
-            for idx in self.temp_polygon_point_ids:
-                self.canvas.delete(idx)
+            for canvas_id in self.temp_polygon_point_ids:
+                self.canvas.delete(canvas_id)
 
     def show_image(self):
         """ Show image on the Canvas """
         if self.image_id:
             self.canvas.delete(self.image_id)
             self.image_id = None
-            self.canvas.imagetk = None  # delete previous image from the canvas
+            self.canvas.imagetk = None
         width, height = self.image.size
         new_size = int(self.imscale * width), int(self.imscale * height)
         imagetk = ImageTk.PhotoImage(self.image.resize(new_size))
         self.image_id = self.canvas.create_image(
             self.canvas.coords(self.text), anchor="nw", image=imagetk
         )
-        self.canvas.lower(self.image_id)  # set it into background
-        self.canvas.imagetk = (
-            imagetk  # keep an extra reference to prevent garbage-collection
-        )
+        self.canvas.lower(self.image_id)
+        self.canvas.imagetk = imagetk
 
     def load_annotations(self):
+        """ Load annotations"""
         path = filedialog.askopenfilename()
-        self.Data.load_annotations(path=path)
+        loaded_annotations = self.Data.load_annotations(path=path)
 
-        for annotation, idx in self.Data:
-            self.load_annotation(annotation, idx)
+        for annotation, unique_id in loaded_annotations:
+            self.load_annotation(annotation, unique_id)
 
-    def load_annotation(self, data, idx):
+    def load_annotation(self, data, unique_id):
 
-        annotation = data.coords_norm
+        coords_norm = data.coords_norm
         shape = data.shape
 
         x, y = self.canvas.coords(self.text)
-        annotation_scale = [
-            (x + i[0] * self.imscale, y + i[1] * self.imscale) for i in annotation
+        coords_scale = [
+            (x + i[0] * self.imscale, y + i[1] * self.imscale) for i in coords_norm
         ]
 
         if shape == "polygon":
-            temp_id = self.draw_polygon_func(annotation_scale, do_temp=False, idx=idx)
+            canvas_id = self.draw_polygon_func(
+                coords_scale, do_temp=False, unique_id=unique_id
+            )
 
         else:
-            coord1, coord2 = annotation_scale
-            temp_id = self.create_annotation_func(idx, coord1, coord2, shape=shape)
+            coord1, coord2 = coords_scale
+            canvas_id = self.create_annotation_func(
+                unique_id, coord1, coord2, shape=shape
+            )
 
-        data.coords = annotation
-        data.canvas_id = temp_id
+        data.canvas_id = canvas_id
 
     def save_annotations(self):
         save_path = filedialog.asksaveasfilename(defaultextension=".json")
-        annotations_json = []
-        for annotation, _ in self.Data:
-            annotation = convert2json(annotation)
-            annotations_json.append(annotation)
-
-        with open(save_path, "w") as f:
-            json.dump(annotations_json, f)
+        self.Data.save_annotations(save_path)
 
     def move_from(self, event):
         """ Remember previous coordinates for scrolling with the mouse """
