@@ -11,6 +11,7 @@ Image annotator using tkinter widgets as gui
 - Save and load annotations as json
 - zoom of image and annotations
 - Able to drag the image together with the annotations
+- Able to combine annotations
 
 ## Feature wish list
 
