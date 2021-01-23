@@ -76,6 +76,10 @@ def get_rectangle(coord1, coord2):
     return x0, y0, x1, y1
 
 
+def rec2poly(x0, y0, x1, y1):
+    return [x0, y0, x0, y1, x1, y1, x1, y0]
+
+
 def oval2poly(x0, y0, x1, y1, steps=20, rotation=0):
     """
     Return an oval as coordinates suitable for create_polygon.

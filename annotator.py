@@ -9,7 +9,7 @@ from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
 from utilities import find_coords
-from get_shapes import get_circle, get_ellipse, get_rectangle, oval2poly
+from get_shapes import get_circle, get_ellipse, get_rectangle, oval2poly, rec2poly
 from data_tkinter_classes import AnnotationsTkinter
 
 
@@ -20,6 +20,7 @@ class Annotator(Frame):
         self.canvas.pack()
 
         self.shape = "circle"
+        self.state = False
         self.do_polygon = False
 
         self.annotations_dict = {}
@@ -43,6 +44,17 @@ class Annotator(Frame):
         self.canvas.bind("<B2-Motion>", self.move_to)
         self.canvas.bind("<MouseWheel>", self.wheel)
 
+        # Shortcuts
+        self.master.bind("c", lambda v: self.set_canvas_mode(mode="create"))
+        self.master.bind("m", lambda v: self.set_canvas_mode(mode="move"))
+        self.master.bind("d", lambda v: self.set_canvas_mode(mode="delete"))
+        self.master.bind("f", lambda v: self.set_canvas_mode(mode="combine"))
+        self.master.bind("t", self.hide_annotations)
+        self.master.bind("e", lambda v: self.set_shape(shape="ellipse"))
+        self.master.bind("i", lambda v: self.set_shape(shape="circle"))
+        self.master.bind("p", lambda v: self.set_shape(shape="polygon"))
+        self.master.bind("r", lambda v: self.set_shape(shape="rectangle"))
+
         self.image = Image.open(filedialog.askopenfilename())
         self.image_id = None
         self.imscale = 1.0
@@ -53,35 +65,38 @@ class Annotator(Frame):
         self.menubar = Menu(self.master)
         self.shape_options = Menu(self.menubar, tearoff=0)
         self.menubar.add_cascade(
-            label="Create", command=lambda: self.set_canvas_mode(mode="create")
+            label="Create (c)", command=lambda: self.set_canvas_mode(mode="create")
         )
         self.menubar.add_cascade(
-            label="Move", command=lambda: self.set_canvas_mode(mode="move")
+            label="Move (m)", command=lambda: self.set_canvas_mode(mode="move")
         )
         self.menubar.add_cascade(
-            label="Delete", command=lambda: self.set_canvas_mode(mode="delete")
+            label="Delete (d)", command=lambda: self.set_canvas_mode(mode="delete")
         )
         self.menubar.add_cascade(
-            label="Combine", command=lambda: self.set_canvas_mode(mode="combine")
+            label="Combine (f)", command=lambda: self.set_canvas_mode(mode="combine")
+        )
+        self.menubar.add_cascade(
+            label="Toggle (t)", command=lambda: self.hide_annotations(None)
         )
         self.menubar.add_cascade(label="Options", menu=self.shape_options)
         self.master.config(menu=self.menubar)
 
         # Shape options
         self.shape_options.add_command(
-            label="Circle",
+            label="Circle (i)",
             command=lambda: self.set_shape(shape="circle"),
         )
         self.shape_options.add_command(
-            label="Ellipse",
+            label="Ellipse (e)",
             command=lambda: self.set_shape(shape="ellipse"),
         )
         self.shape_options.add_command(
-            label="Rectangle",
+            label="Rectangle (r)",
             command=lambda: self.set_shape(shape="rectangle"),
         )
         self.shape_options.add_command(
-            label="Polygon",
+            label="Polygon (p)",
             command=lambda: self.set_shape(shape="polygon"),
         )
         self.menubar.add_cascade(
@@ -127,6 +142,19 @@ class Annotator(Frame):
         if len(self.temp_polygon_point_ids):
             self.save_polygons(None)
         self.shape = shape
+
+    def hide_annotations(self, event):
+        """ Toggles on/off annotations"""
+        if self.state:
+            state = "normal"
+        else:
+            state = "hidden"
+
+        for _, unique_id in self.Data:
+            canvas_id = self.canvas.find_withtag(unique_id)
+            self.canvas.itemconfig(canvas_id, state=state)
+
+        self.state = not self.state
 
     def create_annotation(self, event):
         """ Creates annotations using the coordinates of left mouse clicks"""
@@ -373,6 +401,14 @@ class Annotator(Frame):
                 coord1, coord2 = coords_norm
                 x0, y0, x1, y1 = get_circle(coord1, coord2)
                 point_list = oval2poly(x0, y0, x1, y1)
+                point_list = [
+                    (x, y) for x, y in zip(point_list[0::2], point_list[1::2])
+                ]
+                polygon = Polygon(point_list)
+            elif shape == "rectangle":
+                coord1, coord2 = coords_norm
+                x0, y0, x1, y1 = get_rectangle(coord1, coord2)
+                point_list = rec2poly(x0, y0, x1, y1)
                 point_list = [
                     (x, y) for x, y in zip(point_list[0::2], point_list[1::2])
                 ]
