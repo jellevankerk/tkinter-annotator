@@ -96,6 +96,7 @@ class Annotator(Frame):
         self.set_canvas_mode("create")
 
     def set_canvas_mode(self, mode, event=None):
+        """ Set canvas mode to create, move, delete or combine"""
         self.unbind()
         self.canvas_mode = mode
         if len(self.temp_polygon_point_ids):
@@ -555,6 +556,7 @@ class Annotator(Frame):
         data.canvas_id = canvas_id
 
     def save_annotations(self):
+        """ Saves annotations as json"""
         save_path = filedialog.asksaveasfilename(defaultextension=".json")
         self.Data.save_annotations(save_path)
 
