@@ -9,7 +9,7 @@ from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
 from utilities import find_coords
-from get_shapes import get_circle, get_ellipse, get_rectangle, oval2poly
+from get_shapes import get_circle, get_ellipse, get_rectangle, oval2poly, rec2poly
 from data_tkinter_classes import AnnotationsTkinter
 
 
@@ -401,6 +401,14 @@ class Annotator(Frame):
                 coord1, coord2 = coords_norm
                 x0, y0, x1, y1 = get_circle(coord1, coord2)
                 point_list = oval2poly(x0, y0, x1, y1)
+                point_list = [
+                    (x, y) for x, y in zip(point_list[0::2], point_list[1::2])
+                ]
+                polygon = Polygon(point_list)
+            elif shape == "rectangle":
+                coord1, coord2 = coords_norm
+                x0, y0, x1, y1 = get_rectangle(coord1, coord2)
+                point_list = rec2poly(x0, y0, x1, y1)
                 point_list = [
                     (x, y) for x, y in zip(point_list[0::2], point_list[1::2])
                 ]
