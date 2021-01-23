@@ -96,6 +96,7 @@ class Annotator(Frame):
         self.set_canvas_mode("create")
 
     def set_canvas_mode(self, mode, event=None):
+        """ Set canvas mode to create, move, delete or combine"""
         self.unbind()
         self.canvas_mode = mode
         if len(self.temp_polygon_point_ids):
@@ -107,7 +108,7 @@ class Annotator(Frame):
             self.canvas.bind("<ButtonPress-3>", self.save_polygons)
         elif mode == "move":
             self.canvas.bind("<ButtonPress-1>", self.select_move)
-            self.canvas.bind("<Motion>", self.move_annotation)
+            self.canvas.bind("<B1-Motion>", self.move_annotation)
         elif mode == "delete":
             self.canvas.bind("<ButtonPress-1>", self.select_delete)
             self.canvas.bind("<ButtonPress-3>", self.delete_annotation)
@@ -322,21 +323,24 @@ class Annotator(Frame):
                     y_dim * self.imscale,
                 )
 
-                canvas_id = self.create_annotation_func(
-                    unique_id, coord1_scaled, coord2_scaled, shape
-                )
+                if shape == "ellipse":
+                    x0, y0, x1, y1 = get_ellipse(coord1_scaled, coord2_scaled)
+                    point_list = oval2poly(x0, y0, x1, y1)
 
-                self.canvas.delete(self.move_id)
-                self.canvas.itemconfigure(
-                    canvas_id, tags=(unique_id, "MOVE"), outline="blue", fill="blue"
-                )
+                elif shape == "circle":
+                    x0, y0, x1, y1 = get_circle(coord1_scaled, coord2_scaled)
+                    point_list = oval2poly(x0, y0, x1, y1)
+
+                elif shape == "rectangle":
+                    x0, y0, x1, y1 = get_rectangle(coord1_scaled, coord2_scaled)
+                    point_list = [x0, y0, x1, y1]
+
+                self.canvas.coords(self.move_id, point_list)
                 self.Data.edit_annotation(
                     unique_id,
-                    canvas_id,
+                    self.move_id,
                     [coord1_norm, coord2_norm],
                 )
-
-                self.move_id = canvas_id
 
     def delete_annotation(self, event):
         """ Deletes all canvas objects with the tag 'DELETE'"""
@@ -475,19 +479,11 @@ class Annotator(Frame):
             [x[0] * self.imscale + move_scaled[0], x[1] * self.imscale + move_scaled[1]]
             for x in self.move_polygon_points
         ]
-
-        canvas_id = self.canvas.create_polygon(
-            scaled_centers,
-            fill="blue",
-            tags=(unique_id, "MOVE"),
-            outline="blue",
-            width=3,
-            stipple="gray12",
+        self.canvas.coords(
+            self.move_id, [item for sublist in scaled_centers for item in sublist]
         )
 
-        self.canvas.delete(self.move_id)
-        self.Data.edit_annotation(unique_id, canvas_id, point_centers)
-        self.move_id = canvas_id
+        self.Data.edit_annotation(unique_id, self.move_id, point_centers)
 
     def save_polygons(self, event):
         """ Saves current polygon, after this a new polygon can be saved"""
@@ -560,6 +556,7 @@ class Annotator(Frame):
         data.canvas_id = canvas_id
 
     def save_annotations(self):
+        """ Saves annotations as json"""
         save_path = filedialog.asksaveasfilename(defaultextension=".json")
         self.Data.save_annotations(save_path)
 
