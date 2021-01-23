@@ -286,11 +286,12 @@ class Annotator(Frame):
                 self.canvas.dtag(move_canvas_id, "MOVE")
                 self.move_id = None
                 self.move_polygon_points = []
+                self.canvas.delete("POINTS")
 
             elif (
                 move_canvas_id not in self.delete_ids
                 and move_canvas_id not in self.combine_ids
-            ):
+            ):  # TODO ADD points when you select
                 if not self.move_id:
                     self.canvas.itemconfigure(
                         move_canvas_id, outline="blue", fill="blue"
@@ -362,6 +363,13 @@ class Annotator(Frame):
                 elif shape == "rectangle":
                     x0, y0, x1, y1 = get_rectangle(coord1_scaled, coord2_scaled)
                     point_list = [x0, y0, x1, y1]
+
+                self.canvas.delete("POINTS")
+                self.draw_points(
+                    [(x, y) for x, y in zip(point_list[0::2], point_list[1::2])],
+                    color="blue",
+                    tags=("POINTS"),
+                )
 
                 self.canvas.coords(self.move_id, point_list)
                 self.Data.edit_annotation(
@@ -453,7 +461,7 @@ class Annotator(Frame):
 
         self.draw_polygon_func(self.temp_polygon_points, True)
 
-    def draw_points(self, centers, color="green"):
+    def draw_points(self, centers, color="green", tags=()):
         """ Draws points at all points of polygons"""
         points = []
         for pt in centers:
@@ -461,7 +469,7 @@ class Annotator(Frame):
             x1, y1 = (x - 1), (y - 1)
             x2, y2 = (x + 1), (y + 1)
             dot_id = self.canvas.create_oval(
-                x1, y1, x2, y2, fill="green", outline=color, width=5
+                x1, y1, x2, y2, fill=color, outline=color, width=5, tags=tags
             )
 
             points.append(dot_id)
@@ -515,6 +523,8 @@ class Annotator(Frame):
             [x[0] * self.imscale + move_scaled[0], x[1] * self.imscale + move_scaled[1]]
             for x in self.move_polygon_points
         ]
+        self.canvas.delete("POINTS")
+        self.draw_points(scaled_centers, color="blue", tags=("POINTS"))
         self.canvas.coords(
             self.move_id, [item for sublist in scaled_centers for item in sublist]
         )
