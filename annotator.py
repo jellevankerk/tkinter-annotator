@@ -107,7 +107,7 @@ class Annotator(Frame):
             self.canvas.bind("<ButtonPress-3>", self.save_polygons)
         elif mode == "move":
             self.canvas.bind("<ButtonPress-1>", self.select_move)
-            self.canvas.bind("<Motion>", self.move_annotation)
+            self.canvas.bind("<B1-Motion>", self.move_annotation)
         elif mode == "delete":
             self.canvas.bind("<ButtonPress-1>", self.select_delete)
             self.canvas.bind("<ButtonPress-3>", self.delete_annotation)
