@@ -3,8 +3,8 @@ import uuid
 import cv2
 import json
 import numpy as np
-from shapely.geometry import Polygon
-from shapely.ops import unary_union
+from shapely.geometry import Polygon, LineString
+from shapely.ops import unary_union, split
 from PIL import Image, ImageTk
 from tkinter import Canvas, Frame, Menu, Tk, ALL, filedialog
 
@@ -31,6 +31,7 @@ class Annotator(Frame):
         self.move_id = None
 
         self.motion_id = None
+        self.cut_points = []
         self.temp_coords = []
         self.temp_coords_norm = []
 
@@ -75,6 +76,9 @@ class Annotator(Frame):
         )
         self.menubar.add_cascade(
             label="Combine (f)", command=lambda: self.set_canvas_mode(mode="combine")
+        )
+        self.menubar.add_cascade(
+            label="Cut (u)", command=lambda: self.set_canvas_mode(mode="cut")
         )
         self.menubar.add_cascade(
             label="Toggle (t)", command=lambda: self.hide_annotations(None)
@@ -130,6 +134,8 @@ class Annotator(Frame):
         elif mode == "combine":
             self.canvas.bind("<ButtonPress-1>", self.select_combine)
             self.canvas.bind("<ButtonPress-3>", self.combine_annotation)
+        elif mode == "cut":
+            self.canvas.bind("<ButtonPress-1>", self.create_cut)
 
     def unbind(self):
         """ Unbind keys"""
@@ -444,6 +450,59 @@ class Annotator(Frame):
         else:
             for canvas_id in index_canvas:
                 self.select_combine(event=None, canvas_id=canvas_id)
+
+    def create_cut(self, event):
+        # Get scaled coordinates
+        x_canvas = self.canvas.canvasx(event.x)
+        y_canvas = self.canvas.canvasy(event.y)
+        self.cut_points.extend([x_canvas, y_canvas])
+
+        self.draw_points([(x_canvas, y_canvas)], "yellow", "CUT")
+        if len(self.cut_points) == 4:
+            self.canvas.create_line(self.cut_points, fill="yellow", tags=("CUT"))
+            self.cut_annotations(event, self.cut_points)
+            self.canvas.delete("CUT")
+            self.cut_points = []
+
+    def cut_annotations(self, event, cut_line):
+        unique_id = self.canvas.find_withtag("current")[0]
+        coords_norm, shape = self.Data.get_coords_from_unique_id(unique_id)
+        if shape == "ellipse":
+            coord1, coord2 = coords_norm
+            x0, y0, x1, y1 = get_ellipse(coord1, coord2)
+            point_list = oval2poly(x0, y0, x1, y1)
+            point_list = [(x, y) for x, y in zip(point_list[0::2], point_list[1::2])]
+            polygon = Polygon(point_list)
+        elif shape == "circle":
+            coord1, coord2 = coords_norm
+            x0, y0, x1, y1 = get_circle(coord1, coord2)
+            point_list = oval2poly(x0, y0, x1, y1)
+            point_list = [(x, y) for x, y in zip(point_list[0::2], point_list[1::2])]
+            polygon = Polygon(point_list)
+        elif shape == "rectangle":
+            coord1, coord2 = coords_norm
+            x0, y0, x1, y1 = get_rectangle(coord1, coord2)
+            point_list = rec2poly(x0, y0, x1, y1)
+            point_list = [(x, y) for x, y in zip(point_list[0::2], point_list[1::2])]
+            polygon = Polygon(point_list)
+        else:
+            polygon = Polygon(coords_norm)
+        cut_line = LineString([(x, y) for x, y in zip(cut_line[0::2], cut_line[1::2])])
+        split_polygons = split(polygon, cut_line)
+        for split_polygon in split_polygons:
+            split_polygon = [tuple(x) for x in np.array(split_polygon.exterior)]
+            x_text, y_text = self.canvas.coords(self.text)
+            split_polygon_scale = [
+                (x_text + x[0] * self.imscale, y_text + x[1] * self.imscale)
+                for x in split_polygon
+            ]
+            unique_id = str(uuid.uuid4())
+            canvas_id = self.draw_polygon_func(
+                split_polygon_scale, False, unique_id=unique_id
+            )
+            self.Data.add_annotation(unique_id, canvas_id, split_polygon, "polygon")
+            self.canvas.delete(canvas_id)
+            self.Data.delete_annotation(unique_id)
 
     def draw_polygon(self, event):
         """ Draws polygons"""
