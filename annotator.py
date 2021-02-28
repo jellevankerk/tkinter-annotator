@@ -1,8 +1,7 @@
 import math
 import uuid
-import cv2
-import json
 import numpy as np
+import warnings
 from shapely.geometry import Polygon, LineString
 from shapely.ops import unary_union, split
 from PIL import Image, ImageTk
@@ -56,11 +55,42 @@ class Annotator(Frame):
         self.master.bind("p", lambda v: self.set_shape(shape="polygon"))
         self.master.bind("r", lambda v: self.set_shape(shape="rectangle"))
 
-        self.image = Image.open(filedialog.askopenfilename())
+        self.path = filedialog.askopenfilename()
         self.image_id = None
         self.imscale = 1.0
         self.delta = 0.75
-        width, height = self.image.size
+        self.__filter = Image.ANTIALIAS
+
+        Image.MAX_IMAGE_PIXELS = (
+            1000000000  # suppress DecompressionBombError for big image
+        )
+        with warnings.catch_warnings():  # suppress DecompressionBombWarning for big image
+            warnings.simplefilter("ignore")
+            self.image = Image.open(self.path)
+        self.imwidth, self.imheight = self.image.size
+        # Create image pyramid
+        self.__pyramid = [Image.open(self.path)]
+        self.__ratio = 1.0
+        self.__curr_img = 0  # current image from the pyramid
+        self.__scale = self.imscale * self.__ratio  # image pyramide scale
+        self.__reduction = 2  # reduction degree of image pyramid
+        (w, h), m, j = self.__pyramid[-1].size, 512, 0
+        n = (
+            math.ceil(math.log(min(w, h) / m, self.__reduction)) + 1
+        )  # image pyramid length
+        while w > m and h > m:  # top pyramid image is around 512 pixels in size
+            j += 1
+            print("\rCreating image pyramid: {j} from {n}".format(j=j, n=n), end="")
+            w /= self.__reduction  # divide on reduction degree
+            h /= self.__reduction  # divide on reduction degree
+            self.__pyramid.append(
+                self.__pyramid[-1].resize((int(w), int(h)), self.__filter)
+            )
+        print("\r" + (40 * " ") + "\r", end="")  # hide printed string
+        # Put image into container rectangle and use it to set proper coordinates to the image
+        self.container = self.canvas.create_rectangle(
+            (0, 0, self.imwidth, self.imheight), width=0
+        )
 
         # Menu options
         self.menubar = Menu(self.master)
@@ -109,8 +139,8 @@ class Annotator(Frame):
         self.menubar.add_cascade(
             label="Save annotations", command=self.save_annotations
         )
-        self.text = self.canvas.create_text(0, 0)
-        self.show_image()
+        self.__show_image()
+        self.canvas.focus_set()
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         self.set_canvas_mode("create")
 
@@ -258,11 +288,9 @@ class Annotator(Frame):
 
     def select_delete(self, event):
         """ Selects/deselects the closest annotation and adds/removes 'DELETE' tag"""
-        x_canvas = self.canvas.canvasx(event.x)
-        y_canvas = self.canvas.canvasy(event.y)
-        delete_canvas_id = event.widget.find_closest(x_canvas, y_canvas, halo=2)[0]
+        delete_canvas_id = self.canvas.find_withtag("current")[0]
 
-        if delete_canvas_id != self.image_id:
+        if delete_canvas_id != self.image_id and delete_canvas_id != self.container:
             if delete_canvas_id in self.delete_ids:
                 self.canvas.itemconfigure(
                     delete_canvas_id, outline="green", fill="green"
@@ -286,7 +314,7 @@ class Annotator(Frame):
         """ Selects/deselects the closest annotation and adds/removes 'MOVE' tag"""
         move_canvas_id = self.canvas.find_withtag("current")[0]
 
-        if move_canvas_id != self.image_id:
+        if move_canvas_id != self.image_id and move_canvas_id != self.container:
             if move_canvas_id == self.move_id:
                 self.canvas.itemconfigure(move_canvas_id, outline="green", fill="green")
                 self.canvas.dtag(move_canvas_id, "MOVE")
@@ -314,7 +342,7 @@ class Annotator(Frame):
         if canvas_id:
             combine_canvas_id = canvas_id
 
-        if combine_canvas_id != self.image_id:
+        if combine_canvas_id != self.image_id and combine_canvas_id != self.container:
             if combine_canvas_id in self.combine_ids:
                 fill = "green"
                 self.canvas.itemconfigure(combine_canvas_id, outline="green", fill=fill)
@@ -614,20 +642,75 @@ class Annotator(Frame):
             for canvas_id in self.temp_polygon_point_ids:
                 self.canvas.delete(canvas_id)
 
-    def show_image(self):
-        """ Show image on the Canvas """
+    def __show_image(self):
+        """ Show image on the Canvas. Implements correct image zoom almost like in Google Maps """
         if self.image_id:
             self.canvas.delete(self.image_id)
             self.image_id = None
             self.canvas.imagetk = None
-        width, height = self.image.size
-        new_size = int(self.imscale * width), int(self.imscale * height)
-        imagetk = ImageTk.PhotoImage(self.image.resize(new_size))
-        self.image_id = self.canvas.create_image(
-            self.canvas.coords(self.text), anchor="nw", image=imagetk
+        box_image = self.canvas.coords(self.container)  # get image area
+        box_canvas = (
+            self.canvas.canvasx(0),  # get visible area of the canvas
+            self.canvas.canvasy(0),
+            self.canvas.canvasx(self.canvas.winfo_width()),
+            self.canvas.canvasy(self.canvas.winfo_height()),
         )
-        self.canvas.lower(self.image_id)
-        self.canvas.imagetk = imagetk
+        box_img_int = tuple(map(int, box_image))
+
+        # convert to integer or it will not work properly
+        # Get scroll region box
+        box_scroll = [
+            min(box_img_int[0], box_canvas[0]),
+            min(box_img_int[1], box_canvas[1]),
+            max(box_img_int[2], box_canvas[2]),
+            max(box_img_int[3], box_canvas[3]),
+        ]
+        # Horizontal part of the image is in the visible area
+        if box_scroll[0] == box_canvas[0] and box_scroll[2] == box_canvas[2]:
+            box_scroll[0] = box_img_int[0]
+            box_scroll[2] = box_img_int[2]
+        # Vertical part of the image is in the visible area
+        if box_scroll[1] == box_canvas[1] and box_scroll[3] == box_canvas[3]:
+            box_scroll[1] = box_img_int[1]
+            box_scroll[3] = box_img_int[3]
+        # Convert scroll region to tuple and to integer
+        self.canvas.configure(
+            scrollregion=tuple(map(int, box_scroll))
+        )  # set scroll region
+        x1 = max(
+            box_canvas[0] - box_image[0], 0
+        )  # get coordinates (x1,y1,x2,y2) of the image tile
+        y1 = max(box_canvas[1] - box_image[1], 0)
+        x2 = min(box_canvas[2], box_image[2]) - box_image[0]
+        y2 = min(box_canvas[3], box_image[3]) - box_image[1]
+        if (
+            int(x2 - x1) > 0 and int(y2 - y1) > 0
+        ):  # show image if it in the visible area
+
+            image = self.__pyramid[
+                max(0, self.__curr_img)
+            ].crop(  # crop current img from pyramid
+                (
+                    int(x1 / self.__scale),
+                    int(y1 / self.__scale),
+                    int(x2 / self.__scale),
+                    int(y2 / self.__scale),
+                )
+            )
+            #
+            imagetk = ImageTk.PhotoImage(
+                image.resize((int(x2 - x1), int(y2 - y1)), self.__filter)
+            )
+            self.image_id = self.canvas.create_image(
+                max(box_canvas[0], box_img_int[0]),
+                max(box_canvas[1], box_img_int[1]),
+                anchor="nw",
+                image=imagetk,
+            )
+            self.canvas.lower(self.image_id)  # set image into background
+            self.canvas.imagetk = (
+                imagetk  # keep an extra reference to prevent garbage-collection
+            )
 
     def load_annotations(self):
         """ Load annotations"""
@@ -642,7 +725,7 @@ class Annotator(Frame):
         coords_norm = data.coords_norm
         shape = data.shape
 
-        x, y = self.canvas.coords(self.text)
+        x, y, _, _ = self.canvas.coords(self.container)
         coords_scale = [
             (x + i[0] * self.imscale, y + i[1] * self.imscale) for i in coords_norm
         ]
@@ -672,9 +755,12 @@ class Annotator(Frame):
     def move_to(self, event):
         """ Drag (move) canvas to the new position """
         self.canvas.scan_dragto(event.x, event.y, gain=1)
+        self.__show_image()
 
     def wheel(self, event):
         """ Zoom with mouse wheel """
+        x = self.canvas.canvasx(event.x)  # get coordinates of the event on the canvas
+        y = self.canvas.canvasy(event.y)
         scale = 1.0
 
         if event.delta == -120:
@@ -683,12 +769,20 @@ class Annotator(Frame):
         if event.delta == 120:
             scale /= self.delta
             self.imscale /= self.delta
-        # Rescale all canvas objects
-        x = self.canvas.canvasx(event.x)
-        y = self.canvas.canvasy(event.y)
-        self.canvas.scale("all", x, y, scale, scale)
-        self.show_image()
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+        k = self.imscale * self.__ratio  # temporary coefficient
+        self.__curr_img = min(
+            (-1) * int(math.log(k, self.__reduction)), len(self.__pyramid) - 1
+        )
+        self.__scale = k * math.pow(self.__reduction, max(0, self.__curr_img))
+        #
+        self.canvas.scale("all", x, y, scale, scale)  # rescale all objects
+        # Redraw some figures before showing image on the screen
+        self.redraw_figures()  # method for child classes
+        self.__show_image()
+
+    def redraw_figures(self):
+        pass
 
     def get_coords(self, event):
         """ Get coordinates of the mouse click event on the image """
