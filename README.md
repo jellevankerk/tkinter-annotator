@@ -12,6 +12,8 @@ Image annotator using tkinter widgets as gui
 - zoom of image and annotations
 - Able to drag the image together with the annotations
 - Able to combine annotations
+- Toggle annotations on/off
+- Able to work with large images (pyramid)
 
 ## Feature wish list
 
@@ -19,5 +21,5 @@ Image annotator using tkinter widgets as gui
 - deactivate annotations for the overview
 - Edit annotations after they are made
 - Smart annotations using roi to predict the annotations inside it
-- Toggle annotations on/off
-- Able to work with large images (pyramid)
+- Split annotations
+- Erase annotations with a eraser object
