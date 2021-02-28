@@ -21,6 +21,5 @@ Image annotator using tkinter widgets as gui
 - deactivate annotations for the overview
 - Edit annotations after they are made
 - Smart annotations using roi to predict the annotations inside it
-
 - Split annotations
 - Erase annotations with a eraser object
