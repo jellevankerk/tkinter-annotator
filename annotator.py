@@ -88,9 +88,7 @@ class Annotator(Frame):
             )
         print("\r" + (40 * " ") + "\r", end="")  # hide printed string
         # Put image into container rectangle and use it to set proper coordinates to the image
-        self.container = self.canvas.create_rectangle(
-            (0, 0, self.imwidth, self.imheight), width=0
-        )
+        self.container = self.canvas.create_text(0, 0, width=0)
 
         # Menu options
         self.menubar = Menu(self.master)
@@ -648,7 +646,9 @@ class Annotator(Frame):
             self.canvas.delete(self.image_id)
             self.image_id = None
             self.canvas.imagetk = None
-        box_image = self.canvas.coords(self.container)  # get image area
+        x, y = self.canvas.coords(self.container)
+        x2, y2 = self.imwidth * self.__scale + x, self.imheight * self.__scale + y
+        box_image = (x, y, x2, y2)  # get image area
         box_canvas = (
             self.canvas.canvasx(0),  # get visible area of the canvas
             self.canvas.canvasy(0),
@@ -725,7 +725,7 @@ class Annotator(Frame):
         coords_norm = data.coords_norm
         shape = data.shape
 
-        x, y, _, _ = self.canvas.coords(self.container)
+        x, y = self.canvas.coords(self.container)
         coords_scale = [
             (x + i[0] * self.imscale, y + i[1] * self.imscale) for i in coords_norm
         ]
